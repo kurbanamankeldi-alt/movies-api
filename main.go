@@ -11,12 +11,20 @@ import (
 )
 
 func main() {
-	port := "8081"
+	//initialize database
     database, err := db.Init()
     if err != nil {
         log.Fatal(err)
     }
     defer database.Close()
+
+	//seed with sample data
+	err = db.SeedTables(database)
+	if err != nil {
+		panic(err)
+	}	
+
+	port := "8081"
 	repo := repository.NewSQLiteMovieRepository(database)
 	service := service.NewMovieService(repo)
 	handler := handler.NewMovieHandler(service)	

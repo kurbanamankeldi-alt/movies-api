@@ -2,49 +2,31 @@ package db
 
 import (
     "database/sql"
-    "fmt"
-
     _ "github.com/mattn/go-sqlite3"
 )
 
-func Init() (*sql.DB, error) {
-    db, err := sql.Open("sqlite3", "./my.db")
-    if err != nil {
-        return nil, err
-    }
 
-    if err := db.Ping(); err != nil {
-        db.Close()
-        return nil, err
-    }
-
-    if _, err := CreateTables(db); err != nil {
-        db.Close()
-        return nil, err
-    }
-
-    fmt.Println("Connected to SQLite")
-    return db, nil
-}
-
+//create table relationship
 func CreateTables(db *sql.DB) (sql.Result, error) {
 	query := `
 	CREATE TABLE IF NOT EXISTS movies (
 		id INTEGER PRIMARY KEY,
 		title TEXT NOT NULL,
 		release_year INTEGER NOT NULL,
-		duration REAL NOT NULL
+		duration INTEGER NOT NULL,
+		UNIQUE(title, release_year)
 	);
 
 	CREATE TABLE IF NOT EXISTS actors (
 		id INTEGER PRIMARY KEY,
 		name TEXT NOT NULL,
-		birthdate DATE NOT NULL
+		birthdate TEXT NOT NULL,
+		UNIQUE(name, birthdate)
 	);
 
 	CREATE TABLE IF NOT EXISTS genres (
 		id INTEGER PRIMARY KEY,
-		name TEXT NOT NULL
+		name TEXT NOT NULL UNIQUE
 	);
 
 	CREATE TABLE IF NOT EXISTS movie_actors (
