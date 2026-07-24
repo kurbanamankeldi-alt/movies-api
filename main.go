@@ -29,6 +29,7 @@ func main() {
 	service := service.NewMovieService(repo)
 	handler := handler.NewMovieHandler(service)	
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/movie/", handler.GetById)	
 	mux.HandleFunc("/api/movie", handler.CreateMovie)
 	fmt.Println("Server is running in the below link:")
 	fmt.Printf("http://localhost:%s\n", port)

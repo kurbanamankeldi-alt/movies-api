@@ -24,3 +24,13 @@ func (s *MovieService) CreateMovie(movie *entity.Movie) error {
 
 	return nil
 }
+
+func (s *MovieService) GetMovieById(id int) (*entity.Movie, error) {
+	movie, err := s.repo.FindById(id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return movie, nil
+}

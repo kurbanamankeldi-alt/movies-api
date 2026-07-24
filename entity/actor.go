@@ -9,5 +9,5 @@ type Actor struct {
 	Name string
 	BirthDate time.Time
 
-	Movies []Movie
+	Movies []Movie `json:"movies,omitempty"`
 }
