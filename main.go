@@ -8,6 +8,7 @@ import (
 	"github.com/kurbanamankeldi-alt/movies-api/repository"
 	"github.com/kurbanamankeldi-alt/movies-api/service"
 	"github.com/kurbanamankeldi-alt/movies-api/handler"
+	"github.com/kurbanamankeldi-alt/movies-api/errors"
 )
 
 func main() {
@@ -29,8 +30,9 @@ func main() {
 	service := service.NewMovieService(repo)
 	handler := handler.NewMovieHandler(service)	
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/movie/", handler.GetById)	
-	mux.HandleFunc("/api/movie", handler.CreateMovie)
+	mux.Handle("GET /api/movie", errors.HttpErrorHandler(handler.Get))
+	mux.Handle("GET /api/movie/{id}", errors.HttpErrorHandler(handler.GetById))
+	mux.Handle("POST /api/movie", errors.HttpErrorHandler(handler.Create))
 	fmt.Println("Server is running in the below link:")
 	fmt.Printf("http://localhost:%s\n", port)
 	log.Fatal(http.ListenAndServe(":"+port, mux))	

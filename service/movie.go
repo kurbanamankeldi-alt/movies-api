@@ -34,3 +34,23 @@ func (s *MovieService) GetMovieById(id int) (*entity.Movie, error) {
 
 	return movie, nil
 }
+
+func (s *MovieService) GetAllMovies() ([]*entity.Movie, error) {
+	movies, err := s.repo.FindAll()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return movies, nil
+}
+
+func (s *MovieService) FindMoviesByActor(id int) ([]*entity.Movie, error) {
+	movies, err := s.repo.FindByActor(id )
+
+	if err != nil {
+		return nil, err
+	}
+
+	return movies, nil	
+}

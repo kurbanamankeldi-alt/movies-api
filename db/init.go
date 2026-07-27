@@ -13,6 +13,7 @@ func Init() (*sql.DB, error) {
         return nil, err
     }
 
+    //check if no errors with connection
     if err := db.Ping(); err != nil {
         db.Close()
         return nil, err
