@@ -21,3 +21,10 @@ func (s *ActorService) GetAll() ([]entity.Actor, error) {
 	}
 	return actors, nil
 }
+func (s *ActorService) CreateActor(actor *entity.Actor) (int64, error) {
+	id, err := s.repo.Create(actor)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}

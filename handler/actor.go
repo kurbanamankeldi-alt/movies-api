@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/kurbanamankeldi-alt/movies-api/entity"
 	"github.com/kurbanamankeldi-alt/movies-api/service"
 )
 
@@ -15,10 +16,6 @@ func NewActorHandler(service *service.ActorService) *ActorHandler {
 	return &ActorHandler{service: service}
 }
 func (h *ActorHandler) GetAll(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	actors, err := h.service.GetAll()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -26,4 +23,21 @@ func (h *ActorHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(actors)
+}
+func (h *ActorHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var actor entity.Actor
+	err := json.NewDecoder(r.Body).Decode(&actor)
+	if err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	id, err := h.service.CreateActor(&actor)
+	actor.Id = uint(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(actor)
 }
