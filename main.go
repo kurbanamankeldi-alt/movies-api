@@ -38,6 +38,8 @@ func main() {
 	mux.Handle("GET /api/movie", errors.HttpErrorHandler(handler.Get))
 	mux.Handle("GET /api/movie/{id}", errors.HttpErrorHandler(handler.GetById))
 	mux.Handle("POST /api/movie", errors.HttpErrorHandler(handler.Create))
+	mux.HandleFunc("GET /api/actors", actorHandler.GetAll)
+	mux.HandleFunc("POST /api/actors", actorHandler.Create)
 	fmt.Println("Server is running in the below link:")
 	fmt.Printf("http://localhost:%s\n", port)
 	log.Fatal(http.ListenAndServe(":"+port, mux))
