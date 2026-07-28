@@ -3,7 +3,6 @@ package server
 import (
 	"database/sql"
 	"net/http"
-
 	"github.com/kurbanamankeldi-alt/movies-api/errors"
 	"github.com/kurbanamankeldi-alt/movies-api/handler"
 	"github.com/kurbanamankeldi-alt/movies-api/repository"
@@ -26,6 +25,7 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 
 	mux.Handle("GET /api/movie", errors.HttpErrorHandler(movieHandler.Get))
 	mux.Handle("GET /api/movie/{id}", errors.HttpErrorHandler(movieHandler.GetById))
+	mux.Handle("GET /api/movie/filter", errors.HttpErrorHandler(movieHandler.FilterBy))
 	mux.Handle("POST /api/movie", errors.HttpErrorHandler(movieHandler.Create))
 
 	mux.Handle("GET /api/actors", errors.HttpErrorHandler(actorHandler.GetAll))

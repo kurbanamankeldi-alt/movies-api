@@ -54,3 +54,33 @@ func (s *MovieService) FindMoviesByActor(id int) ([]*entity.Movie, error) {
 
 	return movies, nil	
 }
+
+func (s *MovieService) FindMoviesByGenre(id int) ([]*entity.Movie, error) {
+	movies, err := s.repo.FindByGenre(id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return movies, nil	
+}
+
+func (s *MovieService) FindMoviesByYear(id int) ([]*entity.Movie, error) {
+	movies, err := s.repo.FindByYear(id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return movies, nil	
+}
+
+func (s *MovieService) FilterMoviesBy(movieId, actorId, genreId, year int)  ([]*entity.Movie, error) {
+	movies, err := s.repo.FilterBy(movieId, actorId, genreId, year)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return movies, nil	
+}

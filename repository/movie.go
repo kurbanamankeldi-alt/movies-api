@@ -17,8 +17,10 @@ func NewSQLiteMovieRepository(db *sql.DB) *SQLiteMovieRepository{
 type MovieRepository interface {
     FindAll() ([]*entity.Movie, error)
     FindById(id int) (*entity.Movie, error)
+    FindByYear(year int) ([]*entity.Movie, error)
     FindByActor(actorId int) ([]*entity.Movie, error)
- 	//FindByGenre(genre string) ([]*entity.Movie, error)	    
+ 	FindByGenre(genreId int) ([]*entity.Movie, error)	    
+    FilterBy(movieId, actorId, genreId, year int) ([]*entity.Movie, error)
     Create(movie *entity.Movie) (int64, error)
     //Update(movie *entity.Movie) error
     //Delete(id string) error
@@ -111,6 +113,47 @@ func (r *SQLiteMovieRepository) FindByActor(actorId int) ([]*entity.Movie, error
     return filtered, nil
 }
 
+func (r *SQLiteMovieRepository) FindByGenre(genreId int) ([]*entity.Movie, error) {
+
+    allMovies, err := r.FindAll()
+
+    if err != nil {
+        return nil, err
+    }
+
+    filtered := []*entity.Movie{}
+
+    for _, movie := range allMovies {
+        genres := movie.Genres
+        for _, genre := range genres {
+            if genre.Id == uint(genreId) {
+                filtered = append(filtered, movie)
+            }
+        }
+    }
+
+    return filtered, nil
+}
+
+func (r *SQLiteMovieRepository) FindByYear(year int) ([]*entity.Movie, error) {
+
+    allMovies, err := r.FindAll()
+
+    if err != nil {
+        return nil, err
+    }
+
+    filtered := []*entity.Movie{}
+
+    for _, movie := range allMovies {
+        if movie.ReleaseYear == year {
+            filtered = append(filtered, movie)
+        }
+    }
+
+    return filtered, nil
+}
+
 func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
     sql := `INSERT INTO movies (title, release_year, duration) 
         VALUES (?, ?, ?);`
@@ -121,6 +164,53 @@ func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
     }
     
     return result.LastInsertId()
+}
+
+//extra
+func (r *SQLiteMovieRepository) FilterBy(movieId, actorId, genreId, year int) ([]*entity.Movie, error) {
+
+    movies, err := r.FindAll()
+
+    if err != nil {
+        return nil, err
+    }
+
+    if movieId == 0 && actorId == 0 && genreId == 0 && year == 0 {
+        return movies, nil
+    }
+
+    filtered := []*entity.Movie{}
+
+    for _, movie := range movies {      
+        if movieId != 0 && movie.Id != uint(movieId) {
+            continue
+        }
+
+        actors, err1 := r.GetActorsByMovieId(movie.Id)
+        genres, err2 := r.GetGenresByMovieId(movie.Id)
+
+        if err1 != nil {
+            return nil, err1
+        }
+
+        if err2 != nil {
+            return nil, err2
+        }          
+
+        if actorId != 0 && !containsActor(actors, actorId) {
+            continue
+        }        
+        if genreId != 0 && !containsGenre(genres, genreId) {
+            continue
+        }      
+        if year != 0 && movie.ReleaseYear != year {
+            continue
+        }                  
+
+        filtered = append(filtered, movie)
+    }
+
+    return filtered, nil
 }
 
 //Helpers
@@ -207,4 +297,24 @@ func (r *SQLiteMovieRepository) GetGenresByMovieId(id uint) ([]entity.Genre, err
     }
 
     return genres, nil
+}
+
+func containsActor(actors []entity.Actor, actorId int) bool {
+    for _, actor := range actors {
+        if actor.Id == uint(actorId) {
+            return true
+        }
+    }
+
+    return false
+}
+
+func containsGenre(genres []entity.Genre, genreId int) bool {
+    for _, genre := range genres {
+        if genre.Id == uint(genreId) {
+            return true
+        }
+    }
+
+    return false
 }
