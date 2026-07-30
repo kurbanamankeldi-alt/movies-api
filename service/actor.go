@@ -35,3 +35,10 @@ func (s *ActorService) GetByID(id int) (entity.Actor, error) {
 	}
 	return actor, nil
 }
+func (s *ActorService) GetByName(name string) (entity.Actor, error) {
+	actor, err := s.repo.GetByName(name)
+	if err != nil {
+		return entity.Actor{}, err
+	}
+	return actor, nil
+}

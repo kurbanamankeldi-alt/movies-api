@@ -17,7 +17,19 @@ func NewActorHandler(service *service.ActorService) *ActorHandler {
 	return &ActorHandler{service: service}
 }
 func (h *ActorHandler) GetAll(w http.ResponseWriter, r *http.Request) {
-	actors, err := h.service.GetAll()
+	name := r.URL.Query().Get("name")
+
+	if name == "" {
+		actors, err := h.service.GetAll()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(actors)
+		return
+	}
+	actors, err := h.service.GetByName(name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -49,11 +61,11 @@ func (h *ActorHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	actors, err := h.service.GetByID(id)
+	actor, err := h.service.GetByID(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(actors)
+	json.NewEncoder(w).Encode(actor)
 }
