@@ -24,7 +24,8 @@ type MovieRepository interface {
     FindActors(id int) ([]entity.Actor, error)
     Create(movie *entity.Movie) (int64, error)
     Update(id int, newData *entity.Movie) (int64, error)
-    //Delete(id string) error
+    Delete(id int) (int64, error)
+    //extra method
     FilterBy(movieId, actorId, genreId, year int) ([]*entity.Movie, error)
 }
 
@@ -263,6 +264,31 @@ func (r *SQLiteMovieRepository) Update(id int, newData *entity.Movie) (int64, er
     return result.RowsAffected()
 }
 
+func (r *SQLiteMovieRepository) Delete(id int) (int64, error) {
+    queryForMoviesTable := `DELETE FROM movies WHERE id = ?`
+    queryMovieActorsTable := `DELETE FROM movie_actors WHERE movie_id = ?`
+    queryMovieGenresTable := `DELETE FROM movie_genres WHERE movie_id = ?`
+
+    _, errFromMovieActors := r.db.Exec(queryMovieActorsTable, id)
+    if errFromMovieActors != nil {
+        return 0, errFromMovieActors
+    }
+
+    _, errFromMovieGenres := r.db.Exec(queryMovieGenresTable, id)
+    if errFromMovieGenres != nil {
+        return 0, errFromMovieActors
+    }
+
+    result, err := r.db.Exec(queryForMoviesTable, id)
+    if err != nil {
+        fmt.Println("here")
+        return 0, err
+    }
+
+
+    return result.RowsAffected()
+}
+
 //extra
 func (r *SQLiteMovieRepository) FilterBy(movieId, actorId, genreId, year int) ([]*entity.Movie, error) {
 
@@ -415,3 +441,5 @@ func containsGenre(genres []entity.Genre, genreId int) bool {
 
     return false
 }
+
+//10 9 10 | 2 4

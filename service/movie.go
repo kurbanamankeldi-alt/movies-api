@@ -105,3 +105,13 @@ func (s *MovieService) UpdateMovie(id int, newData *entity.Movie) (int64, error)
 
 	return updatedRow, nil
 }
+
+func (s *MovieService) DeleteMovie(id int) (int64, error) {
+	updatedRow, err := s.repo.Delete(id)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return updatedRow, nil
+}

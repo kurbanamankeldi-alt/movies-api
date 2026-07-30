@@ -287,6 +287,32 @@ func(h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *errors.Htt
 	return nil
 }
 
+func(h *MovieHandler) Delete(w http.ResponseWriter, r *http.Request) *errors.HttpError{
+	if r.Method != http.MethodDelete{
+		return &errors.HttpError{Message:"method not allowed", Code: http.StatusMethodNotAllowed}
+	}
+
+	movieIdStr := r.PathValue("id")
+	movieIdInt, err := strconv.Atoi(movieIdStr)
+
+	if err != nil || movieIdInt <= 0 {
+		return &errors.HttpError{Message:"invalid movie id", Code: http.StatusBadRequest}
+	}
+
+	//movie, _ := h.service.GetMovieById(movieIdInt) 
+
+	_, deleteErr := h.service.DeleteMovie(movieIdInt)
+
+	if deleteErr != nil {
+		return &errors.HttpError{Message:deleteErr.Error(), Code: http.StatusInternalServerError}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	//json.NewEncoder(w).Encode(movie)
+
+	return nil
+}
+
 //helper
 func getIdsFromParam(param string) ([]int, error) {
 	param = strings.TrimSpace(param)
