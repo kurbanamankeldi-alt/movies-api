@@ -26,4 +26,5 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 
 	mux.HandleFunc("GET /api/actors", actorHandler.GetAll)
 	mux.HandleFunc("POST /api/actors", actorHandler.Create)
+	mux.HandleFunc("GET /api/actors/{id}", actorHandler.GetByID)
 }

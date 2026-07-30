@@ -28,3 +28,10 @@ func (s *ActorService) CreateActor(actor *entity.Actor) (int64, error) {
 	}
 	return id, nil
 }
+func (s *ActorService) GetByID(id int) (entity.Actor, error) {
+	actor, err := s.repo.GetByID(id)
+	if err != nil {
+		return entity.Actor{}, err
+	}
+	return actor, nil
+}
