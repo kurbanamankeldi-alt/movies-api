@@ -72,21 +72,27 @@ func (a *SQLiteActorRepository) GetByID(id int) (entity.Actor, error) {
 	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime}, nil
 }
 func (a *SQLiteActorRepository) GetByName(name string) ([]entity.Actor, error) {
-	query := `SELECT id, birthdate FROM actors WHERE name = ?`
-	row := a.db.QueryRow(query, name)
-	var id uint
-	var birthdate string
-	err := row.Scan(&id, &birthdate)
-	if err == sql.ErrNoRows {
-		return []entity.Actor{}, fmt.Errorf("there is no actor with this name: %v", name)
-	} else if err != nil {
-		return []entity.Actor{}, err
-	}
-	birthTime, err := time.Parse("2006-01-02", birthdate)
+	query := `SELECT id, name, birthdate FROM actors WHERE name LIKE ?`
+	searchPattern := "%" + name + "%"
+	rows, err := a.db.Query(query, searchPattern)
 	if err != nil {
 		return []entity.Actor{}, err
 	}
-	return entity.Actor{Id: id, Name: name, BirthDate: birthTime}, nil
+	defer rows.Close()
+	actors := []entity.Actor{}
+	for rows.Next() {
+		var id uint
+		var nameActual, birthdate string
+		if err := rows.Scan(&id, &nameActual, &birthdate); err != nil {
+			return []entity.Actor{}, err
+		}
+		birthTime, err := time.Parse("2006-01-02", birthdate)
+		if err != nil {
+			return []entity.Actor{}, err
+		}
+		actors = append(actors, entity.Actor{Id: uint(id), Name: nameActual, BirthDate: birthTime})
+	}
+	return actors, nil
 }
 func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error) {
 	query := `SELECT name, birthdate FROM actors WHERE id = ?`
