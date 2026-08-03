@@ -69,3 +69,24 @@ func (h *ActorHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(actor)
 }
+func (h *ActorHandler) Update(w http.ResponseWriter, r *http.Request) {
+	idActor := r.PathValue("id")
+	id, err := strconv.Atoi(idActor)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var actorUpdate entity.ActorPatchRequest
+	err1 := json.NewDecoder(r.Body).Decode(&actorUpdate)
+	if err1 != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	actor, err := h.service.Update(id, actorUpdate)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(actor)
+}

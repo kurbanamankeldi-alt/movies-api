@@ -20,21 +20,22 @@ type ActorRepository interface {
 	Create(actor *entity.Actor) (int64, error)
 	GetAll() ([]entity.Actor, error)
 	GetByID(id int) (entity.Actor, error)
-	GetByName(name string) (entity.Actor, error)
+	GetByName(name string) ([]entity.Actor, error)
+	Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error)
 }
 
 func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
-	sql := `INSERT INTO actors (name, birthdate) VALUES (?, ?);`
+	query := `INSERT INTO actors (name, birthdate) VALUES (?, ?);`
 
-	result, err := a.db.Exec(sql, actor.Name, actor.BirthDate.Format("2006-01-02"))
+	result, err := a.db.Exec(query, actor.Name, actor.BirthDate.Format("2006-01-02"))
 	if err != nil {
 		return 0, err
 	}
 	return result.LastInsertId()
 }
 func (a *SQLiteActorRepository) GetAll() ([]entity.Actor, error) {
-	sql := `SELECT id, name, birthdate FROM actors`
-	rows, err := a.db.Query(sql)
+	query := `SELECT id, name, birthdate FROM actors`
+	rows, err := a.db.Query(query)
 	if err != nil {
 		return []entity.Actor{}, err
 	}
@@ -55,48 +56,67 @@ func (a *SQLiteActorRepository) GetAll() ([]entity.Actor, error) {
 	return actors, nil
 }
 func (a *SQLiteActorRepository) GetByID(id int) (entity.Actor, error) {
-	sql := `SELECT id, name, birthdate FROM actors`
-	rows, err := a.db.Query(sql)
+	query := `SELECT name, birthdate FROM actors WHERE id = ?`
+	row := a.db.QueryRow(query, id)
+	var name, birthdate string
+	err := row.Scan(&name, &birthdate)
+	if err == sql.ErrNoRows {
+		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
+	} else if err != nil {
+		return entity.Actor{}, err
+	}
+	birthTime, err := time.Parse("2006-01-02", birthdate)
 	if err != nil {
 		return entity.Actor{}, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var idActor uint
-		var name, birthdate string
-		if err := rows.Scan(&idActor, &name, &birthdate); err != nil {
-			return entity.Actor{}, err
-		}
-		if id == int(idActor) {
-			birthTime, err := time.Parse("2006-01-02", birthdate)
-			if err != nil {
-				return entity.Actor{}, err
-			}
-			return entity.Actor{Id: idActor, Name: name, BirthDate: birthTime}, nil
-		}
-	}
-	return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
+	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime}, nil
 }
-func (a *SQLiteActorRepository) GetByName(name string) (entity.Actor, error) {
-	sql := `SELECT id, name, birthdate FROM actors`
-	rows, err := a.db.Query(sql)
+func (a *SQLiteActorRepository) GetByName(name string) ([]entity.Actor, error) {
+	query := `SELECT id, birthdate FROM actors WHERE name = ?`
+	row := a.db.QueryRow(query, name)
+	var id uint
+	var birthdate string
+	err := row.Scan(&id, &birthdate)
+	if err == sql.ErrNoRows {
+		return []entity.Actor{}, fmt.Errorf("there is no actor with this name: %v", name)
+	} else if err != nil {
+		return []entity.Actor{}, err
+	}
+	birthTime, err := time.Parse("2006-01-02", birthdate)
+	if err != nil {
+		return []entity.Actor{}, err
+	}
+	return entity.Actor{Id: id, Name: name, BirthDate: birthTime}, nil
+}
+func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error) {
+	query := `SELECT name, birthdate FROM actors WHERE id = ?`
+	row := a.db.QueryRow(query, id)
+	var name, birthdate string
+	err := row.Scan(&name, &birthdate)
+	if err == sql.ErrNoRows {
+		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
+	} else if err != nil {
+		return entity.Actor{}, err
+	}
+	if actor.BirthDate != nil {
+		birthdate = *actor.BirthDate
+	}
+	if actor.Name != nil {
+		name = *actor.Name
+	}
+	birthTime, err := time.Parse("2006-01-02", birthdate)
 	if err != nil {
 		return entity.Actor{}, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id uint
-		var nameActor, birthdate string
-		if err := rows.Scan(&id, &nameActor, &birthdate); err != nil {
-			return entity.Actor{}, err
-		}
-		if name == nameActor {
-			birthTime, err := time.Parse("2006-01-02", birthdate)
-			if err != nil {
-				return entity.Actor{}, err
-			}
-			return entity.Actor{Id: id, Name: nameActor, BirthDate: birthTime}, nil
-		}
+	newQuery := `UPDATE actors SET name = ?, birthdate = ? WHERE id = ?`
+	result, err := a.db.Exec(newQuery, name, birthTime.Format("2006-01-02"), id)
+	if err != nil {
+		return entity.Actor{}, err
 	}
-	return entity.Actor{}, fmt.Errorf("there is no actor with this name: %v", name)
+	//if someone delete this entity before this func updates everything
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
+	}
+	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime}, nil
 }

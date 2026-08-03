@@ -35,10 +35,17 @@ func (s *ActorService) GetByID(id int) (entity.Actor, error) {
 	}
 	return actor, nil
 }
-func (s *ActorService) GetByName(name string) (entity.Actor, error) {
-	actor, err := s.repo.GetByName(name)
+func (s *ActorService) GetByName(name string) ([]entity.Actor, error) {
+	actors, err := s.repo.GetByName(name)
+	if err != nil {
+		return []entity.Actor{}, err
+	}
+	return actors, nil
+}
+func (s *ActorService) Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error) {
+	actorUpdated, err := s.repo.Update(id, actor)
 	if err != nil {
 		return entity.Actor{}, err
 	}
-	return actor, nil
+	return actorUpdated, nil
 }
