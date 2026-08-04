@@ -145,6 +145,13 @@ func (a *SQLiteActorRepository) Delete(id int, force bool) (int64, error) {
 	if countFilms > 0 && !force {
 		return 0, fmt.Errorf("You can't delete %s, because he/she plays in %d films", name, countFilms)
 	}
+	if force {
+		queryDeleteConnection := `DELETE FROM movie_actors WHERE actor_id=?`
+		_, err = a.db.Exec(queryDeleteConnection, id)
+		if err != nil {
+			return 0, err
+		}
+	}
 	queryDelete := `DELETE FROM actors WHERE id = ?`
 	result, err := a.db.Exec(queryDelete, id)
 	if err != nil {
