@@ -90,3 +90,19 @@ func (h *ActorHandler) Update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(actor)
 }
+func (h *ActorHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	idActor := r.PathValue("id")
+	id, err := strconv.Atoi(idActor)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	gotForce := r.URL.Query().Get("force")
+	force := gotForce == "true"
+	err = h.service.Delete(id, force)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -22,6 +22,7 @@ type ActorRepository interface {
 	GetByID(id int) (entity.Actor, error)
 	GetByName(name string) ([]entity.Actor, error)
 	Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error)
+	Delete(id int, force bool) (int64, error)
 }
 
 func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
@@ -125,4 +126,29 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
 	}
 	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime}, nil
+}
+func (a *SQLiteActorRepository) Delete(id int, force bool) (int64, error) {
+	query := `SELECT name, birthdate FROM actors WHERE id = ?`
+	row := a.db.QueryRow(query, id)
+	var name, birthdate string
+	err := row.Scan(&name, &birthdate)
+	if err == sql.ErrNoRows {
+		return 0, fmt.Errorf("there is no actor with this id: %v", id)
+	} else if err != nil {
+		return 0, err
+	}
+	countFilms := 0
+	queryCount := `SELECT COUNT(*) FROM movie_actors WHERE actor_id = ? `
+	if err = a.db.QueryRow(queryCount, id).Scan(&countFilms); err != nil {
+		return 0, err
+	}
+	if countFilms > 0 && !force {
+		return 0, fmt.Errorf("You can't delete %s, because he/she plays in %d films", name, countFilms)
+	}
+	queryDelete := `DELETE FROM actors WHERE id = ?`
+	result, err := a.db.Exec(queryDelete, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

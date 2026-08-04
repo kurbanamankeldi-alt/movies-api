@@ -49,3 +49,10 @@ func (s *ActorService) Update(id int, actor entity.ActorPatchRequest) (entity.Ac
 	}
 	return actorUpdated, nil
 }
+func (s *ActorService) Delete(id int, force bool) error {
+	_, err := s.repo.Delete(id, force)
+	if err != nil {
+		return err
+	}
+	return nil
+}
