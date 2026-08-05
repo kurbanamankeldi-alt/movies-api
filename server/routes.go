@@ -19,6 +19,10 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 	actorRepo := repository.NewSQLiteActorRepository(database)
 	actorService := service.NewActorService(actorRepo)
 	actorHandler := handler.NewActorHandler(actorService)
+	//genre
+	genreRepo := repository.NewSQLiteGenreRepository(database)
+	genreService := service.NewGenreService(genreRepo)
+	genreHandler := handler.NewGenreHandler(genreService)
 
 	mux.Handle("GET /api/movie", errors.HttpErrorHandler(movieHandler.Get))
 	mux.Handle("GET /api/movie/{id}", errors.HttpErrorHandler(movieHandler.GetById))
@@ -29,4 +33,10 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 	mux.Handle("GET /api/actors/{id}", errors.HttpErrorHandler(actorHandler.GetByID))
 	mux.Handle("PATCH /api/actors/{id}", errors.HttpErrorHandler(actorHandler.Update))
 	mux.Handle("DELETE /api/actors/{id}", errors.HttpErrorHandler(actorHandler.Delete))
+
+	mux.Handle("GET /api/genres", errors.HttpErrorHandler(genreHandler.GetAll))
+	mux.Handle("POST /api/genres", errors.HttpErrorHandler(genreHandler.Create))
+	mux.Handle("GET /api/genres/{id}", errors.HttpErrorHandler(genreHandler.GetByID))
+	mux.Handle("PATCH /api/genres/{id}", errors.HttpErrorHandler(genreHandler.Update))
+	mux.Handle("DELETE /api/genres/{id}", errors.HttpErrorHandler(genreHandler.Delete))
 }

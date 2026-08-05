@@ -127,7 +127,7 @@ func (g *SQLiteGenreRepository) Delete(id int, force bool) (int64, error) {
 		return 0, err
 	}
 	countFilms := 0
-	queryCount := `SELECT COUNT(*) FROM movie_genres WHERE genres_id = ?`
+	queryCount := `SELECT COUNT(*) FROM movie_genres WHERE genre_id = ?`
 	if err := g.db.QueryRow(queryCount, id).Scan(&countFilms); err != nil {
 		return 0, err
 	}
