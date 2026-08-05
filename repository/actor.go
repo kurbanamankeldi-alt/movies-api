@@ -42,7 +42,7 @@ func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
 		return 0, err
 	}
 	if actor.MovieIds != nil {
-		if err := CreateConnection(tx, id, actor.MovieIds); err != nil {
+		if err := CreateActorConnection(tx, id, actor.MovieIds); err != nil {
 			return 0, err
 		}
 	}
@@ -148,7 +148,7 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
 	}
 	if actor.MovieIds != nil {
-		err := CreateConnection(tx, int64(id), actor.MovieIds)
+		err := CreateActorConnection(tx, int64(id), actor.MovieIds)
 		if err != nil {
 			return entity.Actor{}, err
 		}
@@ -193,7 +193,7 @@ func (a *SQLiteActorRepository) Delete(id int, force bool) (int64, error) {
 }
 
 // helper
-func CreateConnection(tx *sql.Tx, idActor int64, idMovies []int) error {
+func CreateActorConnection(tx *sql.Tx, idActor int64, idMovies []int) error {
 	for _, id := range idMovies {
 		_, err := tx.Exec(`INSERT OR IGNORE INTO movie_actors(movie_id, actor_id) VALUES (?,?)`,
 			id, idActor)
