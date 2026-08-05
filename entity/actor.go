@@ -15,4 +15,5 @@ type Actor struct {
 type ActorPatchRequest struct {
 	Name      *string
 	BirthDate *string
+	MovieIds  []int
 }

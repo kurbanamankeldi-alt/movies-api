@@ -113,10 +113,15 @@ func (a *SQLiteActorRepository) GetByName(name string) ([]entity.Actor, error) {
 	return actors, nil
 }
 func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error) {
+	tx, err := a.db.Begin()
+	if err != nil {
+		return entity.Actor{}, err
+	}
+	defer tx.Rollback()
 	query := `SELECT name, birthdate FROM actors WHERE id = ?`
-	row := a.db.QueryRow(query, id)
+	row := tx.QueryRow(query, id)
 	var name, birthdate string
-	err := row.Scan(&name, &birthdate)
+	err = row.Scan(&name, &birthdate)
 	if err == sql.ErrNoRows {
 		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
 	} else if err != nil {
@@ -133,7 +138,7 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 		return entity.Actor{}, err
 	}
 	newQuery := `UPDATE actors SET name = ?, birthdate = ? WHERE id = ?`
-	result, err := a.db.Exec(newQuery, name, birthTime.Format("2006-01-02"), id)
+	result, err := tx.Exec(newQuery, name, birthTime.Format("2006-01-02"), id)
 	if err != nil {
 		return entity.Actor{}, err
 	}
@@ -141,6 +146,16 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
+	}
+	if actor.MovieIds != nil {
+		err := CreateConnection(tx, int64(id), actor.MovieIds)
+		if err != nil {
+			return entity.Actor{}, err
+		}
+
+	}
+	if err := tx.Commit(); err != nil {
+		return entity.Actor{}, err
 	}
 	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime}, nil
 }
