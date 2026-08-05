@@ -45,3 +45,10 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 	mux.Handle("PATCH /api/movie/{id}", errors.HttpErrorHandler(movieHandler.Update))
 	mux.Handle("DELETE /api/movie/{id}", errors.HttpErrorHandler(movieHandler.Delete))
 }
+
+/*
+POST /api/movies/{id}/actors/{id}
+DELETE /api/movies/{id}/actors/{id}
+POST /api/movies/{id}/genres/{id}
+DELETE /api/movies/{id}/genres/{id}
+*/
