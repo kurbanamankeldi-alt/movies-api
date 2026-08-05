@@ -26,13 +26,30 @@ type ActorRepository interface {
 }
 
 func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
-	query := `INSERT INTO actors (name, birthdate) VALUES (?, ?);`
-
-	result, err := a.db.Exec(query, actor.Name, actor.BirthDate.Format("2006-01-02"))
+	tx, err := a.db.Begin()
 	if err != nil {
 		return 0, err
 	}
-	return result.LastInsertId()
+	defer tx.Rollback()
+	query := `INSERT INTO actors (name, birthdate) VALUES (?, ?);`
+
+	result, err := tx.Exec(query, actor.Name, actor.BirthDate.Format("2006-01-02"))
+	if err != nil {
+		return 0, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if actor.MovieIds != nil {
+		if err := CreateConnection(tx, id, actor.MovieIds); err != nil {
+			return 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 func (a *SQLiteActorRepository) GetAll() ([]entity.Actor, error) {
 	query := `SELECT id, name, birthdate FROM actors`
@@ -158,4 +175,16 @@ func (a *SQLiteActorRepository) Delete(id int, force bool) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+// helper
+func CreateConnection(tx *sql.Tx, idActor int64, idMovies []int) error {
+	for _, id := range idMovies {
+		_, err := tx.Exec(`INSERT OR IGNORE INTO movie_actors(movie_id, actor_id) VALUES (?,?)`,
+			id, idActor)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

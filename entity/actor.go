@@ -9,7 +9,8 @@ type Actor struct {
 	Name      string
 	BirthDate time.Time
 
-	Movies []Movie `json:"movies,omitempty"`
+	Movies   []Movie `json:"movies,omitempty"`
+	MovieIds []int   `json:"movieIds,omitempty"`
 }
 type ActorPatchRequest struct {
 	Name      *string
