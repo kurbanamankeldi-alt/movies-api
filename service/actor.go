@@ -14,8 +14,8 @@ func NewActorService(repo repository.ActorRepository) *ActorService {
 		repo: repo,
 	}
 }
-func (s *ActorService) GetAll() ([]entity.Actor, error) {
-	actors, err := s.repo.GetAll()
+func (s *ActorService) GetAll(movies bool) ([]entity.Actor, error) {
+	actors, err := s.repo.GetAll(movies)
 	if err != nil {
 		return []entity.Actor{}, err
 	}

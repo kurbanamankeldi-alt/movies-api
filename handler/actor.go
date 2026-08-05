@@ -19,9 +19,10 @@ func NewActorHandler(service *service.ActorService) *ActorHandler {
 }
 func (h *ActorHandler) GetAll(w http.ResponseWriter, r *http.Request) *errors.HttpError {
 	name := r.URL.Query().Get("name")
-
+	gotMovies := r.URL.Query().Get("movies")
+	movies := gotMovies == "true"
 	if name == "" {
-		actors, err := h.service.GetAll()
+		actors, err := h.service.GetAll(movies)
 		if err != nil {
 			return &errors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
 		}

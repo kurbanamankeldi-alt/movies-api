@@ -18,7 +18,7 @@ func NewSQLiteActorRepository(db *sql.DB) *SQLiteActorRepository {
 
 type ActorRepository interface {
 	Create(actor *entity.Actor) (int64, error)
-	GetAll() ([]entity.Actor, error)
+	GetAll(moviesFlag bool) ([]entity.Actor, error)
 	GetByID(id int) (entity.Actor, error)
 	GetByName(name string) ([]entity.Actor, error)
 	Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error)
@@ -51,7 +51,7 @@ func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
 	}
 	return id, nil
 }
-func (a *SQLiteActorRepository) GetAll() ([]entity.Actor, error) {
+func (a *SQLiteActorRepository) GetAll(moviesFlag bool) ([]entity.Actor, error) {
 	query := `SELECT id, name, birthdate FROM actors`
 	rows, err := a.db.Query(query)
 	if err != nil {
@@ -69,7 +69,15 @@ func (a *SQLiteActorRepository) GetAll() ([]entity.Actor, error) {
 		if err != nil {
 			return []entity.Actor{}, err
 		}
-		actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime})
+		if moviesFlag {
+			movies, err := a.GetMovies(int(id))
+			if err != nil {
+				return []entity.Actor{}, err
+			}
+			actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime, Movies: movies})
+		} else {
+			actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime})
+		}
 	}
 	return actors, nil
 }
@@ -87,7 +95,11 @@ func (a *SQLiteActorRepository) GetByID(id int) (entity.Actor, error) {
 	if err != nil {
 		return entity.Actor{}, err
 	}
-	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime}, nil
+	movies, err := a.GetMovies(id)
+	if err != nil {
+		return entity.Actor{}, err
+	}
+	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime, Movies: movies}, nil
 }
 func (a *SQLiteActorRepository) GetByName(name string) ([]entity.Actor, error) {
 	query := `SELECT id, name, birthdate FROM actors WHERE name LIKE ?`
@@ -108,7 +120,11 @@ func (a *SQLiteActorRepository) GetByName(name string) ([]entity.Actor, error) {
 		if err != nil {
 			return []entity.Actor{}, err
 		}
-		actors = append(actors, entity.Actor{Id: uint(id), Name: nameActual, BirthDate: birthTime})
+		movies, err := a.GetMovies(int(id))
+		if err != nil {
+			return []entity.Actor{}, err
+		}
+		actors = append(actors, entity.Actor{Id: uint(id), Name: nameActual, BirthDate: birthTime, Movies: movies})
 	}
 	return actors, nil
 }
@@ -202,4 +218,28 @@ func CreateActorConnection(tx *sql.Tx, idActor int64, idMovies []int) error {
 		}
 	}
 	return nil
+}
+func (a *SQLiteActorRepository) GetMovies(id int) ([]entity.Movie, error) {
+	query := `SELECT movies.id, movies.title, movies.release_year, movies.duration
+	FROM movies
+	JOIN movie_actors ON movies.id=movie_actors.movie_id
+	WHERE movie_actors.actor_id = ?`
+	rows, err := a.db.Query(query, id)
+	if err != nil {
+		return []entity.Movie{}, err
+	}
+	defer rows.Close()
+	movies := []entity.Movie{}
+	for rows.Next() {
+		var id uint
+		var title string
+		var year int
+		var duration float64
+		err := rows.Scan(&id, &title, &year, &duration)
+		if err != nil {
+			return []entity.Movie{}, err
+		}
+		movies = append(movies, entity.Movie{Id: id, Title: title, ReleaseYear: year, Duration: duration})
+	}
+	return movies, nil
 }

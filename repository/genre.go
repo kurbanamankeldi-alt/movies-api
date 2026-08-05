@@ -62,7 +62,11 @@ func (g *SQLiteGenreRepository) GetAll() ([]entity.Genre, error) {
 		if err := rows.Scan(&id, &name); err != nil {
 			return []entity.Genre{}, err
 		}
-		genres = append(genres, entity.Genre{Id: id, Name: name})
+		movies, err := g.GetMovies(int(id))
+		if err != nil {
+			return []entity.Genre{}, err
+		}
+		genres = append(genres, entity.Genre{Id: id, Name: name, Movies: movies})
 	}
 	return genres, nil
 }
@@ -76,7 +80,11 @@ func (g *SQLiteGenreRepository) GetByID(id int) (entity.Genre, error) {
 	} else if err != nil {
 		return entity.Genre{}, err
 	}
-	return entity.Genre{Id: uint(id), Name: name}, nil
+	movies, err := g.GetMovies(int(id))
+	if err != nil {
+		return entity.Genre{}, err
+	}
+	return entity.Genre{Id: uint(id), Name: name, Movies: movies}, nil
 }
 func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (entity.Genre, error) {
 	tx, err := g.db.Begin()
@@ -158,4 +166,28 @@ func CreateGenreConnection(tx *sql.Tx, idGenre int64, idMovies []int) error {
 		}
 	}
 	return nil
+}
+func (g *SQLiteGenreRepository) GetMovies(id int) ([]entity.Movie, error) {
+	query := `SELECT movies.id, movies.title, movies.release_year, movies.duration
+	FROM movies
+	JOIN movie_genres ON movies.id=movie_genres.movie_id
+	WHERE movie_genres.genre_id = ?`
+	rows, err := g.db.Query(query, id)
+	if err != nil {
+		return []entity.Movie{}, err
+	}
+	defer rows.Close()
+	movies := []entity.Movie{}
+	for rows.Next() {
+		var id uint
+		var title string
+		var year int
+		var duration float64
+		err := rows.Scan(&id, &title, &year, &duration)
+		if err != nil {
+			return []entity.Movie{}, err
+		}
+		movies = append(movies, entity.Movie{Id: id, Title: title, ReleaseYear: year, Duration: duration})
+	}
+	return movies, nil
 }
