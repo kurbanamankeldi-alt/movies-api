@@ -25,6 +25,7 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 
 	mux.Handle("GET /api/movie", errors.HttpErrorHandler(movieHandler.Get))
 	mux.Handle("GET /api/movie/{id}", errors.HttpErrorHandler(movieHandler.GetById))
+	mux.Handle("GET /api/movie/{id}/actors", errors.HttpErrorHandler(movieHandler.GetActorsById))
 	mux.Handle("GET /api/movie/filter", errors.HttpErrorHandler(movieHandler.FilterBy))
 	mux.Handle("POST /api/movie", errors.HttpErrorHandler(movieHandler.Create))
 

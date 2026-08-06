@@ -4,6 +4,7 @@ import (
 	"database/sql"
     "github.com/kurbanamankeldi-alt/movies-api/entity"
     "time"
+    "fmt"
 )
 
 type SQLiteMovieRepository struct {
@@ -17,13 +18,14 @@ func NewSQLiteMovieRepository(db *sql.DB) *SQLiteMovieRepository{
 type MovieRepository interface {
     FindAll() ([]*entity.Movie, error)
     FindById(id int) (*entity.Movie, error)
+    FindByGenre(genreId int) ([]*entity.Movie, error)	   
     FindByYear(year int) ([]*entity.Movie, error)
-    FindByActor(actorId int) ([]*entity.Movie, error)
- 	FindByGenre(genreId int) ([]*entity.Movie, error)	    
-    FilterBy(movieId, actorId, genreId, year int) ([]*entity.Movie, error)
+    FindByActor(actorId int) ([]*entity.Movie, error) 
+    FindActors(id int) ([]entity.Actor, error)
     Create(movie *entity.Movie) (int64, error)
     //Update(movie *entity.Movie) error
     //Delete(id string) error
+    FilterBy(movieId, actorId, genreId, year int) ([]*entity.Movie, error)
 }
 
 func (r *SQLiteMovieRepository) FindAll() ([]*entity.Movie, error) {
@@ -91,28 +93,6 @@ func (r *SQLiteMovieRepository) FindById(id int) (*entity.Movie, error) {
     return movie, nil
 }
 
-func (r *SQLiteMovieRepository) FindByActor(actorId int) ([]*entity.Movie, error) {
-
-    allMovies, err := r.FindAll()
-
-    if err != nil {
-        return nil, err
-    }
-
-    filtered := []*entity.Movie{}
-
-    for _, movie := range allMovies {
-        actors := movie.Actors
-        for _, actor := range actors {
-            if actor.Id == uint(actorId) {
-                filtered = append(filtered, movie)
-            }
-        }
-    }
-
-    return filtered, nil
-}
-
 func (r *SQLiteMovieRepository) FindByGenre(genreId int) ([]*entity.Movie, error) {
 
     allMovies, err := r.FindAll()
@@ -154,14 +134,78 @@ func (r *SQLiteMovieRepository) FindByYear(year int) ([]*entity.Movie, error) {
     return filtered, nil
 }
 
+func (r *SQLiteMovieRepository) FindByActor(actorId int) ([]*entity.Movie, error) {
+
+    allMovies, err := r.FindAll()
+
+    if err != nil {
+        return nil, err
+    }
+
+    filtered := []*entity.Movie{}
+
+    for _, movie := range allMovies {
+        actors := movie.Actors
+        for _, actor := range actors {
+            if actor.Id == uint(actorId) {
+                filtered = append(filtered, movie)
+            }
+        }
+    }
+
+    return filtered, nil
+}
+
+func (r *SQLiteMovieRepository) FindActors(id int) ([]entity.Actor, error) {
+    movie, err := r.FindById(id)
+
+    if err != nil {
+        return nil, err
+    }
+
+    actors := []entity.Actor{}    
+
+    for _, actor := range movie.Actors {
+        actors = append(actors, actor)
+    }
+
+    return actors, nil
+}
+
 func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
-    sql := `INSERT INTO movies (title, release_year, duration) 
-        VALUES (?, ?, ?);`
-    result, err := r.db.Exec(sql, movie.Title, movie.ReleaseYear, movie.Duration)
+    queryForMovies := `INSERT INTO movies (title, release_year, duration) VALUES (?, ?, ?);`
+    result, err := r.db.Exec(queryForMovies, movie.Title, movie.ReleaseYear, movie.Duration)
 
     if err != nil {
         return 0, err
     }
+
+    movieId, _ := result.LastInsertId()
+
+    //delete records if actor id or genre is wrong
+    queryDeleteMovie := `DELETE FROM movies WHERE id = ?`
+    queryDeleteActor := `DELETE FROM movie_actors WHERE movie_id = ?`
+
+    queryForMovieActors := `INSERT INTO movie_actors (movie_id, actor_id) VALUES (?, ?);`
+
+    for _, actor := range movie.Actors {
+        _, err := r.db.Exec(queryForMovieActors, movieId, actor.Id)
+        if err != nil {
+            _, _ = r.db.Exec(queryDeleteMovie, movieId)
+            return 0, fmt.Errorf("the actor with id %v does not exist", actor.Id)
+        }        
+    }    
+
+    queryForMovieGenres := `INSERT INTO movie_genres (movie_id, genre_id) VALUES (?, ?);`
+
+    for _, genre := range movie.Genres {
+        _, err := r.db.Exec(queryForMovieGenres, movieId, genre.Id)
+        if err != nil {
+             _, _  = r.db.Exec(queryDeleteActor, movieId)         
+             _, _  = r.db.Exec(queryDeleteMovie, movieId)
+             return 0, fmt.Errorf("the genre with id %v does not exist", genre.Id)
+        }        
+    }    
     
     return result.LastInsertId()
 }

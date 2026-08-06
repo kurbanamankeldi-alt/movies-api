@@ -15,16 +15,6 @@ func NewMovieService(repo repository.MovieRepository) *MovieService {
 	}
 }
 
-func (s *MovieService) CreateMovie(movie *entity.Movie) error {
-	_, err := s.repo.Create(movie)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (s *MovieService) GetMovieById(id int) (*entity.Movie, error) {
 	movie, err := s.repo.FindById(id)
 
@@ -74,6 +64,27 @@ func (s *MovieService) FindMoviesByYear(id int) ([]*entity.Movie, error) {
 
 	return movies, nil	
 }
+
+func (s *MovieService) FindMovieActors(id int) ([]entity.Actor, error) {
+	actors, err := s.repo.FindActors(id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return actors, nil	
+}
+
+func (s *MovieService) CreateMovie(movie *entity.Movie) (int64, error) {
+	createdId, err := s.repo.Create(movie)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return createdId, nil
+}
+
 
 func (s *MovieService) FilterMoviesBy(movieId, actorId, genreId, year int)  ([]*entity.Movie, error) {
 	movies, err := s.repo.FilterBy(movieId, actorId, genreId, year)
