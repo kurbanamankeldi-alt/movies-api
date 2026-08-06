@@ -89,7 +89,7 @@ func (a *SQLiteActorRepository) GetByID(id int) (entity.Actor, error) {
 	var name, birthdate string
 	err := row.Scan(&name, &birthdate)
 	if err == sql.ErrNoRows {
-		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
+		return entity.Actor{}, fmt.Errorf("%w actor id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
 		return entity.Actor{}, err
 	}
@@ -141,7 +141,7 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 	var name, birthdate string
 	err = row.Scan(&name, &birthdate)
 	if err == sql.ErrNoRows {
-		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
+		return entity.Actor{}, fmt.Errorf("%w actor id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
 		return entity.Actor{}, err
 	}
@@ -163,7 +163,7 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 	//if someone delete this entity before this func updates everything
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return entity.Actor{}, fmt.Errorf("there is no actor with this id: %v", id)
+		return entity.Actor{}, fmt.Errorf("%w actor id: %d", entity.ErrNotFound, id)
 	}
 	if actor.MovieIds != nil {
 		err := CreateActorConnection(tx, int64(id), actor.MovieIds)
@@ -183,7 +183,7 @@ func (a *SQLiteActorRepository) Delete(id int, force bool) (int64, error) {
 	var name, birthdate string
 	err := row.Scan(&name, &birthdate)
 	if err == sql.ErrNoRows {
-		return 0, fmt.Errorf("there is no actor with this id: %v", id)
+		return 0, fmt.Errorf("%w actor id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
 		return 0, err
 	}

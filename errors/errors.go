@@ -1,18 +1,18 @@
 package errors
 
 import (
-	"net/http"
 	"log"
+	"net/http"
 )
 
 type HttpError struct {
-	Err error
+	Err     error
 	Message string
-	Code int
+	Code    int
 }
 
 func (e *HttpError) Error() string {
-	if e.Err != nil  {
+	if e.Err != nil {
 		return e.Err.Error()
 	}
 	return e.Message

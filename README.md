@@ -31,6 +31,7 @@ Repo → service → handler wiring happens in `routes.go`, inside `RegisterRout
 | `GET` | `/api/actors/{id}` | Actor by id, including filmography |
 | `PATCH` | `/api/actors/{id}` | Partial update: `name`, `birthdate`, `movieIds` — any field can be omitted and won't be changed |
 | `DELETE` | `/api/actors/{id}` | Delete an actor. If they have movies — 400 with a clear message. `?force=true` deletes the links in `movie_actors` first, then the actor |
+| `DELETE` | `/api/actors/deleteconnection/{id}` | Remove specific movie links from an actor. Body: `{"movieIds": [1, 2]}` — only the listed links are removed, the actor and any other links stay intact |
 
 ### Implementation notes
 
@@ -40,6 +41,7 @@ Repo → service → handler wiring happens in `routes.go`, inside `RegisterRout
 - **Creating movie links** (`Create`/`Update` with `movieIds`) is wrapped in a transaction (`tx.Begin()` / `tx.Commit()` / `defer tx.Rollback()`) — if a link insert fails, everything rolls back, including the created/updated actor
 - Link insertion uses `INSERT OR IGNORE INTO movie_actors(movie_id, actor_id) VALUES (?, ?)`, protected against duplicates by the composite `PRIMARY KEY(movie_id, actor_id)`
 - **Force-delete**: first `DELETE FROM movie_actors WHERE actor_id = ?`, then `DELETE FROM actors WHERE id = ?` — order matters because foreign keys are enabled
+- **Removing specific links** (`DeleteConnection`) builds a single `DELETE ... WHERE actor_id = ? AND movie_id IN (?, ?, ...)` query with a dynamically sized placeholder list, instead of one query per movie id
 
 ## Genre — implemented functionality
 
@@ -52,9 +54,13 @@ Same CRUD set and same architecture as Actor:
 | `GET` | `/api/genres/{id}` | Genre by id |
 | `PATCH` | `/api/genres/{id}` | Partial update of the name |
 | `DELETE` | `/api/genres/{id}` | Delete a genre. If it has linked movies — 400, `?force=true` to force delete |
+| `DELETE` | `/api/genres/deleteconnection/{id}` | Remove specific movie links from a genre. Body: `{"movieIds": [1, 2]}` — same pattern as the Actor equivalent |
+
+## Input validation
+
+Both `entity.Actor` and `entity.Genre` have a `Validate()` method (no external library — hand-written checks), called from the service layer before create/update. Errors from multiple fields are combined via `errors.Join`, so a single call can report several problems at once (e.g. empty name and a birth date in the future).
 
 ## Known limitations / TODO
 
 - The standard JSON decoder currently only accepts dates in RFC3339 format (`2000-09-08T00:00:00Z`) on `POST`; the simple `YYYY-MM-DD` format for incoming JSON isn't supported yet (needs a custom `UnmarshalJSON`/`MarshalJSON` for the date type)
 - Pagination (`page`/`size`) for list endpoints isn't implemented yet
-- A dedicated endpoint to remove a single actor–movie link (in addition to bulk-adding via `movieIds`) hasn't been written yet

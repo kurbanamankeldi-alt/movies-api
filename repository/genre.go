@@ -83,7 +83,7 @@ func (g *SQLiteGenreRepository) GetByID(id int) (entity.Genre, error) {
 	var name string
 	err := row.Scan(&name)
 	if err == sql.ErrNoRows {
-		return entity.Genre{}, fmt.Errorf("there is no genre with this id: %v", id)
+		return entity.Genre{}, fmt.Errorf("%w genre id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
 		return entity.Genre{}, err
 	}
@@ -104,7 +104,7 @@ func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (
 	var name string
 	err = row.Scan(&name)
 	if err == sql.ErrNoRows {
-		return entity.Genre{}, fmt.Errorf("there is no genre with this id: %v", id)
+		return entity.Genre{}, fmt.Errorf("%w genre id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
 		return entity.Genre{}, err
 	}
@@ -118,7 +118,7 @@ func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (
 	}
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return entity.Genre{}, fmt.Errorf("there is no genre with this id: %v", id)
+		return entity.Genre{}, fmt.Errorf("%w genre id: %d", entity.ErrNotFound, id)
 	}
 	if genre.MovieIds != nil {
 		err := CreateGenreConnection(tx, int64(id), genre.MovieIds)
@@ -137,7 +137,7 @@ func (g *SQLiteGenreRepository) Delete(id int, force bool) (int64, error) {
 	var name string
 	err := row.Scan(&name)
 	if err == sql.ErrNoRows {
-		return 0, fmt.Errorf("there is no genre with this id: %v", id)
+		return 0, fmt.Errorf("%w genre id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
 		return 0, err
 	}
