@@ -67,7 +67,7 @@ func (r *SQLiteMovieRepository) FindById(id int) (*entity.Movie, error) {
     row := r.db.QueryRow(queryMoviesTable, id)
     movie := &entity.Movie{}
 
-    err := row.Scan(&movie.Id,&movie.Title,&movie.ReleaseYear,&movie.Duration)
+    err := row.Scan(&movie.Id,&movie.Title,&movie.ReleaseYear, &movie.Duration)
     if err != nil {
         return nil, err
     }

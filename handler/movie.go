@@ -247,7 +247,7 @@ func(h *MovieHandler) Create(w http.ResponseWriter, r *http.Request) *errors.Htt
 	createdId, err := h.service.CreateMovie(&movie)
 
 	if err != nil {
-		return &errors.HttpError{Message: err.Error(), Code: http.StatusInternalServerError}
+		return &errors.HttpError{Message: "internal server error", Code: http.StatusInternalServerError}
 	}
 
 	movie.Id = uint(createdId)
@@ -275,8 +275,9 @@ func(h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *errors.Htt
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()	
 	jsonErr := decoder.Decode(&newData)
+
 	if jsonErr != nil {
-		return &errors.HttpError{Message:"invalid json", Code: http.StatusBadRequest}
+		return &errors.HttpError{Message:jsonErr.Error(), Code: http.StatusBadRequest}
 	}  
 
 	_, updateErr := h.service.UpdateMovie(movieIdInt, newData)
@@ -285,7 +286,11 @@ func(h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *errors.Htt
 		return &errors.HttpError{Message:updateErr.Error(), Code: http.StatusInternalServerError}
 	}
 
-	movie, _ := h.service.GetMovieById(movieIdInt) 
+	movie, err := h.service.GetMovieById(movieIdInt) 
+
+	if err != nil {
+		return &errors.HttpError{Message: "internal server error", Code: http.StatusInternalServerError}
+	}
 
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(movie)
@@ -328,11 +333,11 @@ func getIdsFromParam(param string) ([]int, error) {
 
 	for _, val := range paramArr {
 		id, err := strconv.Atoi(val)
-		if err != nil {
+		if err != nil || id <= 0{
 			return nil, fmt.Errorf("invalid id provided: %v",  id)
 		}
 		ids = append(ids, id)
 	}
 
 	return ids, nil
-}
+} 
