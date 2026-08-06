@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
@@ -23,6 +24,7 @@ type ActorRepository interface {
 	GetByName(name string) ([]entity.Actor, error)
 	Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error)
 	Delete(id int, force bool) (int64, error)
+	DeleteConnection(id int, movies []int) (int64, error)
 }
 
 func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
@@ -202,6 +204,21 @@ func (a *SQLiteActorRepository) Delete(id int, force bool) (int64, error) {
 	}
 	queryDelete := `DELETE FROM actors WHERE id = ?`
 	result, err := a.db.Exec(queryDelete, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+func (a *SQLiteActorRepository) DeleteConnection(id int, movies []int) (int64, error) {
+	str := make([]string, len(movies))
+	args := []any{id}
+	for i, movieID := range movies {
+		str[i] = "?"
+		args = append(args, movieID)
+	}
+	placeholder := strings.Join(str, ",")
+	queryDeleteConnection := fmt.Sprintf(`DELETE FROM movie_actors WHERE actor_id=? AND movie_id IN (%s)`, placeholder)
+	result, err := a.db.Exec(queryDeleteConnection, args...)
 	if err != nil {
 		return 0, err
 	}

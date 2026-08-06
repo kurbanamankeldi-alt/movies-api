@@ -102,3 +102,21 @@ func (h *ActorHandler) Delete(w http.ResponseWriter, r *http.Request) *errors.Ht
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
+func (h *ActorHandler) DeleteConnection(w http.ResponseWriter, r *http.Request) *errors.HttpError {
+	idActor := r.PathValue("id")
+	id, err := strconv.Atoi(idActor)
+	if err != nil || id <= 0 {
+		return &errors.HttpError{Err: err, Message: "invalid id", Code: http.StatusBadRequest}
+	}
+	var moviesId entity.DeleteMoviesConnectionRequest
+	err = json.NewDecoder(r.Body).Decode(&moviesId)
+	if err != nil {
+		return &errors.HttpError{Err: err, Message: "invalid json", Code: http.StatusBadRequest}
+	}
+	err = h.service.DeleteConnection(id, moviesId.MovieIds)
+	if err != nil {
+		return &errors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}

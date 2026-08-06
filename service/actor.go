@@ -59,3 +59,10 @@ func (s *ActorService) Delete(id int, force bool) error {
 	}
 	return nil
 }
+func (s *ActorService) DeleteConnection(id int, moviesId []int) error {
+	_, err := s.repo.DeleteConnection(id, moviesId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
