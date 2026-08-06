@@ -22,8 +22,8 @@ func (s *GenreService) CreateGenre(genre *entity.Genre) (int64, error) {
 	}
 	return id, nil
 }
-func (s *GenreService) GetAll() ([]entity.Genre, error) {
-	genres, err := s.repo.GetAll()
+func (s *GenreService) GetAll(moviesFlag bool) ([]entity.Genre, error) {
+	genres, err := s.repo.GetAll(moviesFlag)
 	if err != nil {
 		return []entity.Genre{}, err
 	}
@@ -45,6 +45,13 @@ func (s *GenreService) Update(id int, genre entity.GenrePatchRequest) (entity.Ge
 }
 func (s *GenreService) Delete(id int, force bool) error {
 	_, err := s.repo.Delete(id, force)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (s *GenreService) DeleteConnection(id int, moviesId []int) error {
+	_, err := s.repo.DeleteConnection(id, moviesId)
 	if err != nil {
 		return err
 	}

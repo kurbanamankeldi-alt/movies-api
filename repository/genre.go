@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 )
@@ -17,10 +18,11 @@ func NewSQLiteGenreRepository(db *sql.DB) *SQLiteGenreRepository {
 
 type GenreRepository interface {
 	Create(genre *entity.Genre) (int64, error)
-	GetAll() ([]entity.Genre, error)
+	GetAll(moviesFlag bool) ([]entity.Genre, error)
 	GetByID(id int) (entity.Genre, error)
 	Update(id int, genre entity.GenrePatchRequest) (entity.Genre, error)
 	Delete(id int, force bool) (int64, error)
+	DeleteConnection(id int, movies []int) (int64, error)
 }
 
 func (g *SQLiteGenreRepository) Create(genre *entity.Genre) (int64, error) {
@@ -48,7 +50,7 @@ func (g *SQLiteGenreRepository) Create(genre *entity.Genre) (int64, error) {
 	}
 	return id, nil
 }
-func (g *SQLiteGenreRepository) GetAll() ([]entity.Genre, error) {
+func (g *SQLiteGenreRepository) GetAll(moviesFlag bool) ([]entity.Genre, error) {
 	query := `SELECT id, name FROM genres`
 	rows, err := g.db.Query(query)
 	if err != nil {
@@ -62,11 +64,16 @@ func (g *SQLiteGenreRepository) GetAll() ([]entity.Genre, error) {
 		if err := rows.Scan(&id, &name); err != nil {
 			return []entity.Genre{}, err
 		}
-		movies, err := g.GetMovies(int(id))
-		if err != nil {
-			return []entity.Genre{}, err
+
+		if moviesFlag {
+			movies, err := g.GetMovies(int(id))
+			if err != nil {
+				return []entity.Genre{}, err
+			}
+			genres = append(genres, entity.Genre{Id: id, Name: name, Movies: movies})
+		} else {
+			genres = append(genres, entity.Genre{Id: id, Name: name})
 		}
-		genres = append(genres, entity.Genre{Id: id, Name: name, Movies: movies})
 	}
 	return genres, nil
 }
@@ -151,6 +158,21 @@ func (g *SQLiteGenreRepository) Delete(id int, force bool) (int64, error) {
 	}
 	queryDelete := `DELETE FROM genres WHERE id = ?`
 	result, err := g.db.Exec(queryDelete, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+func (g *SQLiteGenreRepository) DeleteConnection(id int, movies []int) (int64, error) {
+	str := make([]string, len(movies))
+	args := []any{id}
+	for i, movieID := range movies {
+		str[i] = "?"
+		args = append(args, movieID)
+	}
+	placeholder := strings.Join(str, ",")
+	queryDeleteConnection := fmt.Sprintf(`DELETE FROM movie_genres WHERE genre_id=? AND movie_id IN (%s)`, placeholder)
+	result, err := g.db.Exec(queryDeleteConnection, args...)
 	if err != nil {
 		return 0, err
 	}

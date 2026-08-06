@@ -35,8 +35,9 @@ func (h *GenreHandler) Create(w http.ResponseWriter, r *http.Request) *errors.Ht
 	return nil
 }
 func (h *GenreHandler) GetAll(w http.ResponseWriter, r *http.Request) *errors.HttpError {
-
-	genres, err := h.service.GetAll()
+	gotMovies := r.URL.Query().Get("movies")
+	movies := gotMovies == "true"
+	genres, err := h.service.GetAll(movies)
 	if err != nil {
 		return &errors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
 	}
@@ -87,6 +88,24 @@ func (h *GenreHandler) Delete(w http.ResponseWriter, r *http.Request) *errors.Ht
 	gotForce := r.URL.Query().Get("force")
 	force := gotForce == "true"
 	err = h.service.Delete(id, force)
+	if err != nil {
+		return &errors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+func (h *GenreHandler) DeleteConnection(w http.ResponseWriter, r *http.Request) *errors.HttpError {
+	idGenre := r.PathValue("id")
+	id, err := strconv.Atoi(idGenre)
+	if err != nil || id <= 0 {
+		return &errors.HttpError{Err: err, Message: "invalid id", Code: http.StatusBadRequest}
+	}
+	var moviesId entity.DeleteMoviesConnectionRequest
+	err = json.NewDecoder(r.Body).Decode(&moviesId)
+	if err != nil {
+		return &errors.HttpError{Err: err, Message: "invalid json", Code: http.StatusBadRequest}
+	}
+	err = h.service.DeleteConnection(id, moviesId.MovieIds)
 	if err != nil {
 		return &errors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
 	}
