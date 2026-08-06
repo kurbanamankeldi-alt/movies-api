@@ -6,7 +6,7 @@ import (
 	"strings"
 	"fmt"
 	"strconv"
-
+	"github.com/kurbanamankeldi-alt/movies-api/service"
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 	"github.com/kurbanamankeldi-alt/movies-api/errors"
 )
