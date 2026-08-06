@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 	"github.com/kurbanamankeldi-alt/movies-api/repository"
+	"strings"
 )
 
 type MovieService struct {
@@ -13,16 +14,6 @@ func NewMovieService(repo repository.MovieRepository) *MovieService {
 	return &MovieService{
 		repo: repo,
 	}
-}
-
-func (s *MovieService) CreateMovie(movie *entity.Movie) error {
-	_, err := s.repo.Create(movie)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *MovieService) GetMovieById(id int) (*entity.Movie, error) {
@@ -53,4 +44,87 @@ func (s *MovieService) FindMoviesByActor(id int) ([]*entity.Movie, error) {
 	}
 
 	return movies, nil	
+}
+
+func (s *MovieService) FindMoviesByGenre(id int) ([]*entity.Movie, error) {
+	movies, err := s.repo.FindByGenre(id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return movies, nil	
+}
+
+func (s *MovieService) FindMoviesByYear(id int) ([]*entity.Movie, error) {
+	movies, err := s.repo.FindByYear(id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return movies, nil	
+}
+
+func (s *MovieService) FindMovieActors(id int) ([]entity.Actor, error) {
+	actors, err := s.repo.FindActors(id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return actors, nil	
+}
+
+func (s *MovieService) CreateMovie(movie *entity.Movie) (int64, error) {
+
+	if err := movie.ValidateMovie(); err != nil {
+		return 0, err
+	}
+
+	//make first letter upper and rest lower
+	movie.Title = strings.Title(strings.ToLower(movie.Title))
+
+	createdId, err := s.repo.Create(movie)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return createdId, nil
+}
+
+func (s *MovieService) FilterMoviesBy(movieId, actorId, genreId, year int)  ([]*entity.Movie, error) {
+	movies, err := s.repo.FilterBy(movieId, actorId, genreId, year)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return movies, nil	
+}
+
+func (s *MovieService) UpdateMovie(id int, newData *entity.Movie) (int64, error) {
+
+	if err := newData.ValidateMovie(); err != nil {
+		return 0, err
+	}
+
+	updatedRow, err := s.repo.Update(id, newData)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return updatedRow, nil
+}
+
+func (s *MovieService) DeleteMovie(id int) (int64, error) {
+	updatedRow, err := s.repo.Delete(id)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return updatedRow, nil
 }

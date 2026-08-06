@@ -251,7 +251,7 @@ func (a *SQLiteActorRepository) GetMovies(id int) ([]entity.Movie, error) {
 		var id uint
 		var title string
 		var year int
-		var duration float64
+		var duration int
 		err := rows.Scan(&id, &title, &year, &duration)
 		if err != nil {
 			return []entity.Movie{}, err
