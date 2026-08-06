@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 	"github.com/kurbanamankeldi-alt/movies-api/repository"
+	"strings"
 )
 
 type MovieService struct {
@@ -76,6 +77,14 @@ func (s *MovieService) FindMovieActors(id int) ([]entity.Actor, error) {
 }
 
 func (s *MovieService) CreateMovie(movie *entity.Movie) (int64, error) {
+
+	if err := movie.ValidateMovie(); err != nil {
+		return 0, err
+	}
+
+	//make first letter upper and rest lower
+	movie.Title = strings.Title(strings.ToLower(movie.Title))
+
 	createdId, err := s.repo.Create(movie)
 
 	if err != nil {
@@ -84,7 +93,6 @@ func (s *MovieService) CreateMovie(movie *entity.Movie) (int64, error) {
 
 	return createdId, nil
 }
-
 
 func (s *MovieService) FilterMoviesBy(movieId, actorId, genreId, year int)  ([]*entity.Movie, error) {
 	movies, err := s.repo.FilterBy(movieId, actorId, genreId, year)
@@ -97,6 +105,11 @@ func (s *MovieService) FilterMoviesBy(movieId, actorId, genreId, year int)  ([]*
 }
 
 func (s *MovieService) UpdateMovie(id int, newData *entity.Movie) (int64, error) {
+
+	if err := newData.ValidateMovie(); err != nil {
+		return 0, err
+	}
+
 	updatedRow, err := s.repo.Update(id, newData)
 
 	if err != nil {

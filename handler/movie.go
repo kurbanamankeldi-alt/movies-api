@@ -9,7 +9,6 @@ import (
 
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 	"github.com/kurbanamankeldi-alt/movies-api/errors"
-	"log"
 )
 
 type MovieHandler struct {
@@ -23,7 +22,6 @@ func NewMovieHandler(s *service.MovieService) *MovieHandler {
 }
 
 func(h *MovieHandler) Get(w http.ResponseWriter, r *http.Request) *errors.HttpError{
-	log.Printf("Method: %q, Path: %q", r.Method, r.URL.Path)
 	if r.Method != http.MethodGet {
 		return &errors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
 	}
@@ -60,7 +58,10 @@ func(h *MovieHandler) Get(w http.ResponseWriter, r *http.Request) *errors.HttpEr
 	}
 
 	if err != nil {
-		return &errors.HttpError{Message: "movie not found", Code: http.StatusNotFound}
+		return &errors.HttpError{
+			Message:"internal server error",
+			Code:http.StatusInternalServerError,
+		}	
 	}
 
 	response, err := json.Marshal(movies)
@@ -85,14 +86,15 @@ func (h *MovieHandler) GetById(w http.ResponseWriter, r *http.Request) *errors.H
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 
-	if err != nil {
-		return &errors.HttpError{Message: "invalid movie id", Code: http.StatusBadRequest}
-	}
+
+	if err != nil || id<=0 {
+		return &errors.HttpError{Message:"invalid movie id", Code: http.StatusBadRequest}
+	}	
 
 	movie, err := h.service.GetMovieById(id)
 
 	if err != nil {
-		return &errors.HttpError{Message: "movie not found", Code: http.StatusNotFound}
+		return &errors.HttpError{Message:"internal server error", Code: http.StatusInternalServerError}		
 	}
 
 	response, err := json.Marshal(movie)
@@ -117,14 +119,14 @@ func(h *MovieHandler) GetActorsById(w http.ResponseWriter, r *http.Request) *err
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 
-	if err != nil {
+	if err != nil || id<=0 {
 		return &errors.HttpError{Message:"invalid movie id", Code: http.StatusBadRequest}
 	}	
 
 	actors, err := h.service.FindMovieActors(id)
 
 	if err != nil {
-		return &errors.HttpError{Message:"no actors found", Code: http.StatusNotFound}		
+		return &errors.HttpError{Message:"internal server error", Code: http.StatusInternalServerError}		
 	}
 
 	response, err := json.Marshal(actors)
@@ -141,6 +143,7 @@ func(h *MovieHandler) GetActorsById(w http.ResponseWriter, r *http.Request) *err
 
 }
 
+//extra
 func(h *MovieHandler) FilterBy(w http.ResponseWriter, r *http.Request) *errors.HttpError{
 	if r.Method != http.MethodGet {
 		return &errors.HttpError{Message:"method not allowed", Code: http.StatusMethodNotAllowed}
@@ -188,7 +191,7 @@ func(h *MovieHandler) FilterBy(w http.ResponseWriter, r *http.Request) *errors.H
 	movie, err := h.service.FilterMoviesBy(id, actorId, genreId, year)
 
 	if err != nil {
-		return &errors.HttpError{Message:"movie not found", Code: http.StatusNotFound}		
+		return &errors.HttpError{Message:"internal server error", Code: http.StatusInternalServerError}		
 	}
 
 	response, err := json.Marshal(movie)
@@ -226,6 +229,13 @@ func(h *MovieHandler) Create(w http.ResponseWriter, r *http.Request) *errors.Htt
 
 	var movie entity.Movie
 
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	err := decoder.Decode(&movie)
+	if err != nil {
+		return &errors.HttpError{Message:"invalid json", Code: http.StatusBadRequest}
+	}	
+
 	for _, id := range actorIds {
 		movie.Actors = append(movie.Actors, entity.Actor{Id:uint(id)})
 	}
@@ -233,12 +243,6 @@ func(h *MovieHandler) Create(w http.ResponseWriter, r *http.Request) *errors.Htt
 	for _, id := range genreIds {
 		movie.Genres = append(movie.Genres, entity.Genre{Id:uint(id)})
 	}	
-
-
-	err := json.NewDecoder(r.Body).Decode(&movie)
-	if err != nil {
-		return &errors.HttpError{Message:"invalid json", Code: http.StatusBadRequest}
-	}
 
 	createdId, err := h.service.CreateMovie(&movie)
 
@@ -268,7 +272,9 @@ func(h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *errors.Htt
 
 	var newData *entity.Movie
 
-	jsonErr := json.NewDecoder(r.Body).Decode(&newData)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()	
+	jsonErr := decoder.Decode(&newData)
 	if jsonErr != nil {
 		return &errors.HttpError{Message:"invalid json", Code: http.StatusBadRequest}
 	}  
@@ -299,8 +305,6 @@ func(h *MovieHandler) Delete(w http.ResponseWriter, r *http.Request) *errors.Htt
 		return &errors.HttpError{Message:"invalid movie id", Code: http.StatusBadRequest}
 	}
 
-	//movie, _ := h.service.GetMovieById(movieIdInt) 
-
 	_, deleteErr := h.service.DeleteMovie(movieIdInt)
 
 	if deleteErr != nil {
@@ -308,19 +312,17 @@ func(h *MovieHandler) Delete(w http.ResponseWriter, r *http.Request) *errors.Htt
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-	//json.NewEncoder(w).Encode(movie)
 
 	return nil
 }
 
 //helper
 func getIdsFromParam(param string) ([]int, error) {
-	param = strings.TrimSpace(param)
-
 	if len(param) == 0 {
-		return nil, fmt.Errorf("params not provided: %v", param)
+		return []int{}, nil
 	}
 
+	param = strings.TrimSpace(param)
 	paramArr := strings.Split(param, ",")
 	ids := []int{}
 
