@@ -5,8 +5,7 @@ import (
 
 	"github.com/kurbanamankeldi-alt/movies-api/db"
 
-	"github.com/kurbanamankeldi-alt/movies-api/server
-
+	"github.com/kurbanamankeldi-alt/movies-api/server"
 )
 
 func main() {
