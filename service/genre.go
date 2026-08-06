@@ -13,6 +13,9 @@ func NewGenreService(repo repository.GenreRepository) *GenreService {
 	return &GenreService{repo: repo}
 }
 func (s *GenreService) CreateGenre(genre *entity.Genre) (int64, error) {
+	if err := genre.Validate(); err != nil {
+		return 0, err
+	}
 	id, err := s.repo.Create(genre)
 	if err != nil {
 		return 0, err
