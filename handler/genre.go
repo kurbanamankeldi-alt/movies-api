@@ -102,6 +102,9 @@ func (h *GenreHandler) Delete(w http.ResponseWriter, r *http.Request) *e.HttpErr
 		if errors.Is(err, entity.ErrNotFound) {
 			return &e.HttpError{Err: err, Message: err.Error(), Code: http.StatusNotFound}
 		}
+		if errors.Is(err, entity.ErrHasRelations) {
+			return &e.HttpError{Err: err, Message: err.Error(), Code: http.StatusConflict}
+		}
 		return &e.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -193,7 +193,7 @@ func (a *SQLiteActorRepository) Delete(id int, force bool) (int64, error) {
 		return 0, err
 	}
 	if countFilms > 0 && !force {
-		return 0, fmt.Errorf("You can't delete %s, because he/she plays in %d films", name, countFilms)
+		return 0, fmt.Errorf("%w: %s plays in %d films", entity.ErrHasRelations, name, countFilms)
 	}
 	if force {
 		queryDeleteConnection := `DELETE FROM movie_actors WHERE actor_id=?`

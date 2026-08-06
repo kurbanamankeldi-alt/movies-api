@@ -147,7 +147,7 @@ func (g *SQLiteGenreRepository) Delete(id int, force bool) (int64, error) {
 		return 0, err
 	}
 	if countFilms > 0 && !force {
-		return 0, fmt.Errorf("You can't delete %s genre, because it's connected to %d films", name, id)
+		return 0, fmt.Errorf("%w: %s in %d films", entity.ErrHasRelations, name, id)
 	}
 	if force {
 		queryDeleteConnection := `DELETE FROM movie_genres WHERE genre_id=?`
