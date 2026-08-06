@@ -23,7 +23,7 @@ type MovieRepository interface {
     FindByActor(actorId int) ([]*entity.Movie, error) 
     FindActors(id int) ([]entity.Actor, error)
     Create(movie *entity.Movie) (int64, error)
-    //Update(movie *entity.Movie) error
+    Update(id int, newData *entity.Movie) (int64, error)
     //Delete(id string) error
     FilterBy(movieId, actorId, genreId, year int) ([]*entity.Movie, error)
 }
@@ -208,6 +208,59 @@ func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
     }    
     
     return result.LastInsertId()
+}
+
+func (r *SQLiteMovieRepository) Update(id int, newData *entity.Movie) (int64, error) {
+
+    queryForMovies := `UPDATE movies 
+                       SET title = ?, release_year = ?, duration = ? 
+                       WHERE id = ?;`
+
+    queryForMovieActorsDelete := `DELETE FROM movie_actors WHERE movie_id = ?`
+    queryForMovieGenresDelete := `DELETE FROM movie_genres WHERE movie_id = ?`
+                       
+    queryForMovieActors := `INSERT INTO movie_actors (movie_id, actor_id) VALUES (?, ?);`
+    queryForMovieGenres := `INSERT INTO movie_genres (movie_id, genre_id) VALUES (?, ?);`                         
+
+    result, err := r.db.Exec(queryForMovies, newData.Title, newData.ReleaseYear, newData.Duration, id)
+
+    actors, genres := newData.Actors, newData.Genres
+    actorIds, genreIds := []uint{}, []uint{}
+
+    for _, actor := range actors {
+        actorIds = append(actorIds, actor.Id)
+    }
+
+    for _, genre := range genres {
+        genreIds = append(genreIds, genre.Id) //10 11 12 1 3 --> 9 10 2 4
+    }
+
+    if len(actorIds) > 0 {
+        _, _ = r.db.Exec(queryForMovieActorsDelete, id)
+        for _, actorId := range actorIds {
+            _, err := r.db.Exec(queryForMovieActors, id, actorId)
+            if err != nil {
+                return 0, err
+            }
+        }
+    }
+
+    if len(genreIds) > 0 {
+        _, _ = r.db.Exec(queryForMovieGenresDelete, id)
+        for _, genreId := range genreIds {
+            _, err := r.db.Exec(queryForMovieGenres, id, genreId)
+            if err != nil {
+                return 0, err
+            }
+        }
+    }    
+
+
+    if err != nil {
+        return 0, err
+    }
+
+    return result.RowsAffected()
 }
 
 //extra

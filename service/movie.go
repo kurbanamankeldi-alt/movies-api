@@ -95,3 +95,13 @@ func (s *MovieService) FilterMoviesBy(movieId, actorId, genreId, year int)  ([]*
 
 	return movies, nil	
 }
+
+func (s *MovieService) UpdateMovie(id int, newData *entity.Movie) (int64, error) {
+	updatedRow, err := s.repo.Update(id, newData)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return updatedRow, nil
+}
