@@ -17,6 +17,22 @@ type ActorHandler struct {
 func NewActorHandler(service *service.ActorService) *ActorHandler {
 	return &ActorHandler{service: service}
 }
+func (h *ActorHandler) Create(w http.ResponseWriter, r *http.Request) *errors.HttpError {
+	var actor entity.Actor
+	err := json.NewDecoder(r.Body).Decode(&actor)
+	if err != nil {
+		return &errors.HttpError{Err: err, Message: "invalid json", Code: http.StatusBadRequest}
+	}
+	id, err := h.service.CreateActor(&actor)
+	actor.Id = uint(id)
+	if err != nil {
+		return &errors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(actor)
+	return nil
+}
 func (h *ActorHandler) GetAll(w http.ResponseWriter, r *http.Request) *errors.HttpError {
 	name := r.URL.Query().Get("name")
 	gotMovies := r.URL.Query().Get("movies")
@@ -38,26 +54,10 @@ func (h *ActorHandler) GetAll(w http.ResponseWriter, r *http.Request) *errors.Ht
 	json.NewEncoder(w).Encode(actors)
 	return nil
 }
-func (h *ActorHandler) Create(w http.ResponseWriter, r *http.Request) *errors.HttpError {
-	var actor entity.Actor
-	err := json.NewDecoder(r.Body).Decode(&actor)
-	if err != nil {
-		return &errors.HttpError{Err: err, Message: "invalid json", Code: http.StatusBadRequest}
-	}
-	id, err := h.service.CreateActor(&actor)
-	actor.Id = uint(id)
-	if err != nil {
-		return &errors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(actor)
-	return nil
-}
 func (h *ActorHandler) GetByID(w http.ResponseWriter, r *http.Request) *errors.HttpError {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
-	if err != nil {
+	if err != nil || id <= 0 {
 		return &errors.HttpError{Err: err, Message: "invalid id", Code: http.StatusBadRequest}
 	}
 	actor, err := h.service.GetByID(id)
@@ -71,7 +71,7 @@ func (h *ActorHandler) GetByID(w http.ResponseWriter, r *http.Request) *errors.H
 func (h *ActorHandler) Update(w http.ResponseWriter, r *http.Request) *errors.HttpError {
 	idActor := r.PathValue("id")
 	id, err := strconv.Atoi(idActor)
-	if err != nil {
+	if err != nil || id <= 0 {
 		return &errors.HttpError{Err: err, Message: "invalid id", Code: http.StatusBadRequest}
 	}
 	var actorUpdate entity.ActorPatchRequest
@@ -90,7 +90,7 @@ func (h *ActorHandler) Update(w http.ResponseWriter, r *http.Request) *errors.Ht
 func (h *ActorHandler) Delete(w http.ResponseWriter, r *http.Request) *errors.HttpError {
 	idActor := r.PathValue("id")
 	id, err := strconv.Atoi(idActor)
-	if err != nil {
+	if err != nil || id <= 0 {
 		return &errors.HttpError{Err: err, Message: "invalid id", Code: http.StatusBadRequest}
 	}
 	gotForce := r.URL.Query().Get("force")

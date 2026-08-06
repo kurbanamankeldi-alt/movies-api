@@ -48,7 +48,7 @@ func (h *GenreHandler) GetAll(w http.ResponseWriter, r *http.Request) *errors.Ht
 func (h *GenreHandler) GetByID(w http.ResponseWriter, r *http.Request) *errors.HttpError {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
-	if err != nil {
+	if err != nil || id <= 0 {
 		return &errors.HttpError{Err: err, Message: "invalid id", Code: http.StatusBadRequest}
 	}
 	genre, err := h.service.GetByID(id)
@@ -62,7 +62,7 @@ func (h *GenreHandler) GetByID(w http.ResponseWriter, r *http.Request) *errors.H
 func (h *GenreHandler) Update(w http.ResponseWriter, r *http.Request) *errors.HttpError {
 	idGenre := r.PathValue("id")
 	id, err := strconv.Atoi(idGenre)
-	if err != nil {
+	if err != nil || id <= 0 {
 		return &errors.HttpError{Err: err, Message: "invalid id", Code: http.StatusBadRequest}
 	}
 	var genreUpdate entity.GenrePatchRequest
@@ -81,7 +81,7 @@ func (h *GenreHandler) Update(w http.ResponseWriter, r *http.Request) *errors.Ht
 func (h *GenreHandler) Delete(w http.ResponseWriter, r *http.Request) *errors.HttpError {
 	idGenre := r.PathValue("id")
 	id, err := strconv.Atoi(idGenre)
-	if err != nil {
+	if err != nil || id <= 0 {
 		return &errors.HttpError{Err: err, Message: "invalid id", Code: http.StatusBadRequest}
 	}
 	gotForce := r.URL.Query().Get("force")

@@ -14,19 +14,22 @@ func NewActorService(repo repository.ActorRepository) *ActorService {
 		repo: repo,
 	}
 }
+func (s *ActorService) CreateActor(actor *entity.Actor) (int64, error) {
+	if err := actor.Validate(); err != nil {
+		return 0, err
+	}
+	id, err := s.repo.Create(actor)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
 func (s *ActorService) GetAll(movies bool) ([]entity.Actor, error) {
 	actors, err := s.repo.GetAll(movies)
 	if err != nil {
 		return []entity.Actor{}, err
 	}
 	return actors, nil
-}
-func (s *ActorService) CreateActor(actor *entity.Actor) (int64, error) {
-	id, err := s.repo.Create(actor)
-	if err != nil {
-		return 0, err
-	}
-	return id, nil
 }
 func (s *ActorService) GetByID(id int) (entity.Actor, error) {
 	actor, err := s.repo.GetByID(id)
