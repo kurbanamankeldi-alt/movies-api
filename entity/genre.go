@@ -16,7 +16,7 @@ type GenrePatchRequest struct {
 
 func (g *Genre) Validate() error {
 	if g.Name == "" {
-		return fmt.Errorf("there is no name for genre")
+		return fmt.Errorf("%w: there is no name for genre", ErrInvalidContent)
 	}
 	return nil
 }

@@ -28,6 +28,9 @@ func (h *GenreHandler) Create(w http.ResponseWriter, r *http.Request) *customerr
 	id, err := h.service.CreateGenre(&genre)
 	genre.Id = uint(id)
 	if err != nil {
+		if errors.Is(err, entity.ErrInvalidContent) {
+			return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusBadRequest}
+		}
 		return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
 	}
 
