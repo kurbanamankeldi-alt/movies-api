@@ -18,10 +18,10 @@ type Actor struct {
 func (a *Actor) Validate() error {
 	var err1, err2 error
 	if a.Name == "" {
-		err1 = fmt.Errorf("Name is empty")
+		err1 = fmt.Errorf("%w: name is empty", ErrInvalidContent)
 	}
 	if a.BirthDate.After(time.Now()) {
-		err2 = fmt.Errorf("The actor %s isn't born yet", a.Name)
+		err2 = fmt.Errorf("%w: the actor %s isn't born yet", ErrInvalidContent, a.Name)
 	}
 	return errors.Join(err1, err2)
 }
