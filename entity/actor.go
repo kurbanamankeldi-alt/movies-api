@@ -30,6 +30,11 @@ func ValidateDate(date time.Time, name string) error {
 	return nil
 }
 
+type ActorCreateRequest struct {
+	Name      string
+	BirthDate string
+	MovieIds  []int
+}
 type ActorPatchRequest struct {
 	Name      *string
 	BirthDate *string

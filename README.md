@@ -62,5 +62,4 @@ Both `entity.Actor` and `entity.Genre` have a `Validate()` method (no external l
 
 ## Known limitations / TODO
 
-- The standard JSON decoder currently only accepts dates in RFC3339 format (`2000-09-08T00:00:00Z`) on `POST`; the simple `YYYY-MM-DD` format for incoming JSON isn't supported yet (needs a custom `UnmarshalJSON`/`MarshalJSON` for the date type)
 - Pagination (`page`/`size`) for list endpoints isn't implemented yet

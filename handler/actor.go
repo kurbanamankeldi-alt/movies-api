@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/kurbanamankeldi-alt/movies-api/customerrors"
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
@@ -19,11 +20,19 @@ func NewActorHandler(service *service.ActorService) *ActorHandler {
 	return &ActorHandler{service: service}
 }
 func (h *ActorHandler) Create(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
-	var actor entity.Actor
-	err := json.NewDecoder(r.Body).Decode(&actor)
+	var actorRaw entity.ActorCreateRequest
+	err := json.NewDecoder(r.Body).Decode(&actorRaw)
 	if err != nil {
 		return &customerrors.HttpError{Err: err, Message: "invalid json", Code: http.StatusBadRequest}
 	}
+	var actor entity.Actor
+	actor.Name = actorRaw.Name
+	actor.MovieIds = actorRaw.MovieIds
+	date, err := time.Parse("2006-01-02", actorRaw.BirthDate)
+	if err != nil {
+		return &customerrors.HttpError{Err: err, Message: "invalid json: invalid data format", Code: http.StatusBadRequest}
+	}
+	actor.BirthDate = date
 	id, err := h.service.CreateActor(&actor)
 	actor.Id = uint(id)
 	if err != nil {
