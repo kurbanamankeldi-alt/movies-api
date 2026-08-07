@@ -1,6 +1,8 @@
 package service
 
 import (
+	"time"
+
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 	"github.com/kurbanamankeldi-alt/movies-api/repository"
 )
@@ -46,6 +48,19 @@ func (s *ActorService) GetByName(name string) ([]entity.Actor, error) {
 	return actors, nil
 }
 func (s *ActorService) Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error) {
+	if actor.BirthDate != nil {
+		date, err := time.Parse("2006-01-02", *actor.BirthDate)
+		if err != nil {
+			return entity.Actor{}, err
+		}
+		name := ""
+		if actor.Name != nil {
+			name = *actor.Name
+		}
+		if err = entity.ValidateDate(date, name); err != nil {
+			return entity.Actor{}, err
+		}
+	}
 	actorUpdated, err := s.repo.Update(id, actor)
 	if err != nil {
 		return entity.Actor{}, err

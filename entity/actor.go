@@ -20,10 +20,14 @@ func (a *Actor) Validate() error {
 	if a.Name == "" {
 		err1 = fmt.Errorf("%w: name is empty", ErrInvalidContent)
 	}
-	if a.BirthDate.After(time.Now()) {
-		err2 = fmt.Errorf("%w: the actor %s isn't born yet", ErrInvalidContent, a.Name)
-	}
+	err2 = ValidateDate(a.BirthDate, a.Name)
 	return errors.Join(err1, err2)
+}
+func ValidateDate(date time.Time, name string) error {
+	if date.After(time.Now()) {
+		return fmt.Errorf("%w: the actor %s isn't born yet", ErrInvalidContent, name)
+	}
+	return nil
 }
 
 type ActorPatchRequest struct {

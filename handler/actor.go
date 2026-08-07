@@ -94,6 +94,9 @@ func (h *ActorHandler) Update(w http.ResponseWriter, r *http.Request) *customerr
 		if errors.Is(err, entity.ErrNotFound) {
 			return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusNotFound}
 		}
+		if errors.Is(err, entity.ErrInvalidContent) {
+			return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusBadRequest}
+		}
 		return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
 	}
 	w.Header().Set("Content-Type", "application/json")
