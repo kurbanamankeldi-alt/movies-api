@@ -32,7 +32,7 @@ func (s *MovieService) GetAllMovies() ([]*entity.Movie, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	
 	return movies, nil
 }
 
@@ -77,11 +77,6 @@ func (s *MovieService) FindMovieActors(id int) ([]entity.Actor, error) {
 }
 
 func (s *MovieService) CreateMovie(movie *entity.Movie) (int64, error) {
-
-	if err := movie.ValidateMovie(); err != nil {
-		return 0, err
-	}
-
 	//make first letter upper and rest lower
 	movie.Title = strings.Title(strings.ToLower(movie.Title))
 
@@ -105,11 +100,6 @@ func (s *MovieService) FilterMoviesBy(movieId, actorId, genreId, year int)  ([]*
 }
 
 func (s *MovieService) UpdateMovie(id int, newData *entity.Movie) (int64, error) {
-
-	if err := newData.ValidateMovie(); err != nil {
-		return 0, err
-	}
-
 	updatedRow, err := s.repo.Update(id, newData)
 
 	if err != nil {
