@@ -19,7 +19,7 @@ func NewSQLiteActorRepository(db *sql.DB) *SQLiteActorRepository {
 
 type ActorRepository interface {
 	Create(actor *entity.Actor) (int64, error)
-	GetAll(moviesFlag bool) ([]entity.Actor, error)
+	GetAll(moviesFlag bool, page int, size int, pagination bool) (entity.PaginatedActorResponse, error)
 	GetByID(id int) (entity.Actor, error)
 	GetByName(name string) ([]entity.Actor, error)
 	Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error)
@@ -53,11 +53,20 @@ func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
 	}
 	return id, nil
 }
-func (a *SQLiteActorRepository) GetAll(moviesFlag bool) ([]entity.Actor, error) {
+func (a *SQLiteActorRepository) GetAll(moviesFlag bool, page int, size int, pagination bool) (entity.PaginatedActorResponse, error) {
+	offset := page * size
 	query := `SELECT id, name, birthdate FROM actors`
-	rows, err := a.db.Query(query)
+	queryPagination := `SELECT id, name, birthdate FROM actors ORDER BY id LIMIT ? OFFSET ?`
+	queryCount := `SELECT COUNT(*) FROM actors`
+	var err error
+	var rows *sql.Rows
+	if pagination {
+		rows, err = a.db.Query(queryPagination, size, offset)
+	} else {
+		rows, err = a.db.Query(query)
+	}
 	if err != nil {
-		return []entity.Actor{}, err
+		return entity.PaginatedActorResponse{}, err
 	}
 	defer rows.Close()
 	actors := []entity.Actor{}
@@ -65,23 +74,35 @@ func (a *SQLiteActorRepository) GetAll(moviesFlag bool) ([]entity.Actor, error) 
 		var id uint
 		var name, birthdate string
 		if err := rows.Scan(&id, &name, &birthdate); err != nil {
-			return []entity.Actor{}, err
+			return entity.PaginatedActorResponse{}, err
 		}
 		birthTime, err := time.Parse("2006-01-02", birthdate)
 		if err != nil {
-			return []entity.Actor{}, err
+			return entity.PaginatedActorResponse{}, err
 		}
 		if moviesFlag {
 			movies, err := a.GetMovies(int(id))
 			if err != nil {
-				return []entity.Actor{}, err
+				return entity.PaginatedActorResponse{}, err
 			}
 			actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime, Movies: movies})
 		} else {
 			actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime})
 		}
 	}
-	return actors, nil
+	countActors := 0
+	if err = a.db.QueryRow(queryCount).Scan(&countActors); err != nil {
+		return entity.PaginatedActorResponse{}, err
+	}
+	var result entity.PaginatedActorResponse
+	result.Actors = actors
+	result.Page = uint(page)
+	result.Size = uint(size)
+	if !pagination {
+		result.Size = uint(len(actors))
+	}
+	result.Total = uint(countActors)
+	return result, nil
 }
 func (a *SQLiteActorRepository) GetByID(id int) (entity.Actor, error) {
 	query := `SELECT name, birthdate FROM actors WHERE id = ?`

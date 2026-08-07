@@ -51,7 +51,25 @@ func (h *ActorHandler) GetAll(w http.ResponseWriter, r *http.Request) *customerr
 	gotMovies := r.URL.Query().Get("movies")
 	movies := gotMovies == "true"
 	if name == "" {
-		actors, err := h.service.GetAll(movies)
+		page := r.URL.Query().Get("page")
+		size := r.URL.Query().Get("size")
+		pagination := true
+		pageInt, sizeInt := 0, 0
+		var err error
+		if page == "" && size == "" {
+			pagination = false
+		}
+		if pagination {
+			pageInt, err = strconv.Atoi(page)
+			if err != nil || pageInt < 0 {
+				return &customerrors.HttpError{Err: err, Message: "invalid page number", Code: http.StatusBadRequest}
+			}
+			sizeInt, err = strconv.Atoi(size)
+			if err != nil || sizeInt <= 0 {
+				return &customerrors.HttpError{Err: err, Message: "invalid size number", Code: http.StatusBadRequest}
+			}
+		}
+		actors, err := h.service.GetAll(movies, pageInt, sizeInt, pagination)
 		if err != nil {
 			if errors.Is(err, entity.ErrNotFound) {
 				return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusNotFound}

@@ -24,8 +24,9 @@ Repo → service → handler wiring happens in `routes.go`, inside `RegisterRout
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/actors` | Create an actor. Body: `name`, `birthdate` (ISO 8601, `YYYY-MM-DD` or full RFC3339), optional `movieIds: []int` to link to existing movies right away |
+| `POST` | `/api/actors` | Create an actor. Body: `name`, `birthdate` (`YYYY-MM-DD`), optional `movieIds: []int` to link to existing movies right away |
 | `GET` | `/api/actors` | List all actors. Without `movies`, filmography is not fetched (avoids unnecessary JOINs on every request) |
+| `GET` | `/api/actors?page={page}&size={size}` | Paginated list of all actors. Both params are required together; response includes `page`, `size`, and `total` (total actor count, regardless of pagination) |
 | `GET` | `/api/actors?movies=true` | List all actors, each including their filmography |
 | `GET` | `/api/actors?name={name}` | Search by name, partial case-insensitive match (`LIKE %name%`). Always includes filmography for each match |
 | `GET` | `/api/actors/{id}` | Actor by id, including filmography |
@@ -36,7 +37,7 @@ Repo → service → handler wiring happens in `routes.go`, inside `RegisterRout
 ### Implementation notes
 
 - **Actor filmography** (`GetMovies`) uses `JOIN movies ON movies.id = movie_actors.movie_id WHERE movie_actors.actor_id = ?` — a single query instead of a loop of individual ones
-- **Dates** are stored in the DB as `TEXT` in `YYYY-MM-DD` format, converted both ways via `time.Parse("2006-01-02", ...)` / `.Format("2006-01-02")`
+- **Pagination** (`GetAll`) uses `LIMIT ? OFFSET ?` in SQL (`OFFSET = page * size`), plus a separate `SELECT COUNT(*)` for `total`. Requesting a page beyond the data just returns an empty `results` list with `200 OK` (no special-casing needed — SQL handles it naturally)
 - **PATCH** takes a separate `ActorPatchRequest` struct with pointer fields (`*string`, etc.) so "field not provided" can be distinguished from "field provided empty"
 - **Creating movie links** (`Create`/`Update` with `movieIds`) is wrapped in a transaction (`tx.Begin()` / `tx.Commit()` / `defer tx.Rollback()`) — if a link insert fails, everything rolls back, including the created/updated actor
 - Link insertion uses `INSERT OR IGNORE INTO movie_actors(movie_id, actor_id) VALUES (?, ?)`, protected against duplicates by the composite `PRIMARY KEY(movie_id, actor_id)`
@@ -51,6 +52,7 @@ Same CRUD set and same architecture as Actor:
 |---|---|---|
 | `POST` | `/api/genres` | Create a genre |
 | `GET` | `/api/genres` | List all genres |
+| `GET` | `/api/genres?movies=true` | List all genres, each including their filmography |
 | `GET` | `/api/genres/{id}` | Genre by id |
 | `PATCH` | `/api/genres/{id}` | Partial update of the name |
 | `DELETE` | `/api/genres/{id}` | Delete a genre. If it has linked movies — 400, `?force=true` to force delete |
@@ -60,6 +62,7 @@ Same CRUD set and same architecture as Actor:
 
 Both `entity.Actor` and `entity.Genre` have a `Validate()` method (no external library — hand-written checks), called from the service layer before create/update. Errors from multiple fields are combined via `errors.Join`, so a single call can report several problems at once (e.g. empty name and a birth date in the future).
 
-## Known limitations / TODO
+## Errors
 
-- Pagination (`page`/`size`) for list endpoints isn't implemented yet
+- Sentinel errors (`entity.ErrNotFound`, `entity.ErrInvalidContent`) are wrapped with `%w` in repository/service errors, so handlers can check the cause via `errors.Is(...)` and pick the right HTTP status (404, 400) instead of always returning 500
+- All handlers return `*customerrors.HttpError` instead of writing to the response directly; a single `HttpErrorHandler.ServeHTTP` (shared with the Movie module) logs the underlying error and writes the response in one place

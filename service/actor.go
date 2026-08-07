@@ -26,10 +26,10 @@ func (s *ActorService) CreateActor(actor *entity.Actor) (int64, error) {
 	}
 	return id, nil
 }
-func (s *ActorService) GetAll(movies bool) ([]entity.Actor, error) {
-	actors, err := s.repo.GetAll(movies)
+func (s *ActorService) GetAll(movies bool, page int, size int, pagination bool) (entity.PaginatedActorResponse, error) {
+	actors, err := s.repo.GetAll(movies, page, size, pagination)
 	if err != nil {
-		return []entity.Actor{}, err
+		return entity.PaginatedActorResponse{}, err
 	}
 	return actors, nil
 }

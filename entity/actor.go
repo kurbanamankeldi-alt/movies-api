@@ -30,6 +30,12 @@ func ValidateDate(date time.Time, name string) error {
 	return nil
 }
 
+type PaginatedActorResponse struct {
+	Actors []Actor
+	Page   uint
+	Size   uint
+	Total  uint
+}
 type ActorCreateRequest struct {
 	Name      string
 	BirthDate string
