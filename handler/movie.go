@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-
+	"errors"
+	"log"
 	"github.com/kurbanamankeldi-alt/movies-api/customerrors"
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 	"github.com/kurbanamankeldi-alt/movies-api/service"
@@ -59,10 +60,7 @@ func (h *MovieHandler) Get(w http.ResponseWriter, r *http.Request) *customerrors
 	}
 
 	if err != nil {
-		return &customerrors.HttpError{
-			Message: "internal server error",
-			Code:    http.StatusInternalServerError,
-		}
+		return errorResponse(err)
 	}
 
 	response, err := json.Marshal(movies)
@@ -94,7 +92,7 @@ func (h *MovieHandler) GetById(w http.ResponseWriter, r *http.Request) *customer
 	movie, err := h.service.GetMovieById(id)
 
 	if err != nil {
-		return &customerrors.HttpError{Message: "internal server error", Code: http.StatusInternalServerError}
+	 	return errorResponse(err)
 	}
 
 	response, err := json.Marshal(movie)
@@ -126,74 +124,10 @@ func (h *MovieHandler) GetActorsById(w http.ResponseWriter, r *http.Request) *cu
 	actors, err := h.service.FindMovieActors(id)
 
 	if err != nil {
-		return &customerrors.HttpError{Message: "internal server error", Code: http.StatusInternalServerError}
+		return errorResponse(err)
 	}
 
 	response, err := json.Marshal(actors)
-
-	if err != nil {
-		return &customerrors.HttpError{Message: "failed to encode JSON", Code: http.StatusInternalServerError}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(response)
-
-	return nil
-
-}
-
-// extra
-func (h *MovieHandler) FilterBy(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
-	if r.Method != http.MethodGet {
-		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
-	}
-
-	idStr := r.URL.Query().Get("id")
-	actorIdStr := r.URL.Query().Get("actorId")
-	genreIdStr := r.URL.Query().Get("genreId")
-	yearStr := r.URL.Query().Get("year")
-
-	if idStr == "" && actorIdStr == "" && genreIdStr == "" && yearStr == "" {
-		return h.Get(w, r)
-	}
-
-	var (
-		id, actorId, genreId, year             int
-		idErr, actorIdErr, genreIdErr, yearErr error
-	)
-
-	if idStr != "" {
-		id, idErr = strconv.Atoi(idStr)
-	}
-	if actorIdStr != "" {
-		actorId, actorIdErr = strconv.Atoi(actorIdStr)
-	}
-	if genreIdStr != "" {
-		genreId, genreIdErr = strconv.Atoi(genreIdStr)
-	}
-	if yearStr != "" {
-		year, yearErr = strconv.Atoi(yearStr)
-	}
-
-	if idErr != nil || actorIdErr != nil || genreIdErr != nil || yearErr != nil {
-		return &customerrors.HttpError{Message: "param should be positive number", Code: http.StatusBadRequest}
-	}
-
-	if (idStr != "" && id <= 0) ||
-		(actorIdStr != "" && actorId <= 0) ||
-		(genreIdStr != "" && genreId <= 0) ||
-		(yearStr != "" && year <= 0) {
-		return &customerrors.HttpError{Message: "param should be positive number", Code: http.StatusBadRequest}
-	}
-
-	movie, err := h.service.FilterMoviesBy(id, actorId, genreId, year)
-
-	if err != nil {
-		return &customerrors.HttpError{Message: "internal server error", Code: http.StatusInternalServerError}
-	}
-
-	response, err := json.Marshal(movie)
 
 	if err != nil {
 		return &customerrors.HttpError{Message: "failed to encode JSON", Code: http.StatusInternalServerError}
@@ -243,10 +177,14 @@ func (h *MovieHandler) Create(w http.ResponseWriter, r *http.Request) *customerr
 		movie.Genres = append(movie.Genres, entity.Genre{Id: uint(id)})
 	}
 
+	if err := movie.ValidateMovie(); err != nil {
+		return &customerrors.HttpError{Message: err.Error(), Code: http.StatusBadRequest}
+	}
+
 	createdId, err := h.service.CreateMovie(&movie)
 
 	if err != nil {
-		return &customerrors.HttpError{Message: "internal server error", Code: http.StatusInternalServerError}
+		return errorResponse(err)
 	}
 
 	movie.Id = uint(createdId)
@@ -279,16 +217,22 @@ func (h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *customerr
 		return &customerrors.HttpError{Message: jsonErr.Error(), Code: http.StatusBadRequest}
 	}
 
+	if err := newData.ValidateMovie(); err != nil {
+		return &customerrors.HttpError{Message: err.Error(), Code: http.StatusBadRequest}
+	}	
+
 	_, updateErr := h.service.UpdateMovie(movieIdInt, newData)
 
+	fmt.Println(updateErr)
+
 	if updateErr != nil {
-		return &customerrors.HttpError{Message: updateErr.Error(), Code: http.StatusInternalServerError}
+		return errorResponse(updateErr)
 	}
 
 	movie, err := h.service.GetMovieById(movieIdInt)
 
 	if err != nil {
-		return &customerrors.HttpError{Message: "internal server error", Code: http.StatusInternalServerError}
+		return errorResponse(err)
 	}
 
 	w.WriteHeader(http.StatusAccepted)
@@ -312,12 +256,76 @@ func (h *MovieHandler) Delete(w http.ResponseWriter, r *http.Request) *customerr
 	_, deleteErr := h.service.DeleteMovie(movieIdInt)
 
 	if deleteErr != nil {
-		return &customerrors.HttpError{Message: deleteErr.Error(), Code: http.StatusInternalServerError}
+		return errorResponse(err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 
 	return nil
+}
+
+// extra
+func (h *MovieHandler) FilterBy(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
+	if r.Method != http.MethodGet {
+		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
+	}
+
+	idStr := r.URL.Query().Get("id")
+	actorIdStr := r.URL.Query().Get("actorId")
+	genreIdStr := r.URL.Query().Get("genreId")
+	yearStr := r.URL.Query().Get("year")
+
+	if idStr == "" && actorIdStr == "" && genreIdStr == "" && yearStr == "" {
+		return h.Get(w, r)
+	}
+
+	var (
+		id, actorId, genreId, year             int
+		idErr, actorIdErr, genreIdErr, yearErr error
+	)
+
+	if idStr != "" {
+		id, idErr = strconv.Atoi(idStr)
+	}
+	if actorIdStr != "" {
+		actorId, actorIdErr = strconv.Atoi(actorIdStr)
+	}
+	if genreIdStr != "" {
+		genreId, genreIdErr = strconv.Atoi(genreIdStr)
+	}
+	if yearStr != "" {
+		year, yearErr = strconv.Atoi(yearStr)
+	}
+
+	if idErr != nil || actorIdErr != nil || genreIdErr != nil || yearErr != nil {
+		return &customerrors.HttpError{Message: "param should be positive number", Code: http.StatusBadRequest}
+	}
+
+	if (idStr != "" && id <= 0) ||
+		(actorIdStr != "" && actorId <= 0) ||
+		(genreIdStr != "" && genreId <= 0) ||
+		(yearStr != "" && year <= 0) {
+		return &customerrors.HttpError{Message: "param should be positive number", Code: http.StatusBadRequest}
+	}
+
+	movie, err := h.service.FilterMoviesBy(id, actorId, genreId, year)
+
+	if err != nil {
+		return errorResponse(err)
+	}
+
+	response, err := json.Marshal(movie)
+
+	if err != nil {
+		return &customerrors.HttpError{Message: "failed to encode JSON", Code: http.StatusInternalServerError}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(response)
+
+	return nil
+
 }
 
 // helper
@@ -339,4 +347,39 @@ func getIdsFromParam(param string) ([]int, error) {
 	}
 
 	return ids, nil
+}
+
+func errorResponse(err error) *customerrors.HttpError {
+	if err == nil {
+		return nil
+	}
+
+	switch {
+	case errors.Is(err, customerrors.ErrDB):
+		return &customerrors.HttpError{
+			Message: "internal server error",
+			Code:    http.StatusInternalServerError,
+		}
+	case errors.Is(err, customerrors.ErrNotFound):
+		return &customerrors.HttpError{
+			Message: "not found",
+			Code:    http.StatusNotFound,
+		}	
+	case errors.Is(err, customerrors.ErrConflict):
+		return &customerrors.HttpError{
+			Message: "conflict",
+			Code:    http.StatusConflict,
+		}
+	case errors.Is(err, customerrors.ErrInvalidReference):
+		return &customerrors.HttpError{
+			Message: "invalid data",
+			Code:    http.StatusBadRequest,
+		}		
+	default:
+		log.Println("Uknown error", err)
+		return &customerrors.HttpError{
+			Message: "internal server error",
+			Code:    http.StatusInternalServerError,
+		}		
+	}
 }

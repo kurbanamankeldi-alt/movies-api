@@ -3,8 +3,11 @@ package repository
 import (
 	"database/sql"
     "github.com/kurbanamankeldi-alt/movies-api/entity"
+    "github.com/kurbanamankeldi-alt/movies-api/customerrors"
+    sqlite3 "github.com/mattn/go-sqlite3"
     "time"
     "strings"
+    "errors"
     "fmt"
 )
 
@@ -35,7 +38,7 @@ func (r *SQLiteMovieRepository) FindAll() ([]*entity.Movie, error) {
 
     rows, err := r.db.Query(queryMoviesTable)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("%w: select movies: %w", customerrors.ErrDB, err)
     }
     defer rows.Close()
 
@@ -45,13 +48,13 @@ func (r *SQLiteMovieRepository) FindAll() ([]*entity.Movie, error) {
         m := &entity.Movie{}
         err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
         if err != nil {
-            return nil, err
+            return nil, fmt.Errorf("%w: scan movie row: %w", customerrors.ErrDB, err)
         }
         movies = append(movies, m)
     }
 
-    if err = rows.Err(); err != nil {
-        return nil, err
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("%w: iterate movie rows: %w", customerrors.ErrDB, err)
     }
 
     if err := r.populateRelations(movies); err != nil {
@@ -69,7 +72,10 @@ func (r *SQLiteMovieRepository) FindById(id int) (*entity.Movie, error) {
 
     err := row.Scan(&movie.Id,&movie.Title,&movie.ReleaseYear, &movie.Duration)
     if err != nil {
-        return nil, err
+        if errors.Is(err, sql.ErrNoRows) {
+            return nil, fmt.Errorf("%w: not found (movieId=%d): %w", customerrors.ErrNotFound, id, err)
+        }
+        return nil, fmt.Errorf("%w: select movie by id: %w", customerrors.ErrDB, err)
     }
 
     if err := r.populateRelations([]*entity.Movie{movie}); err != nil {
@@ -96,7 +102,7 @@ func (r *SQLiteMovieRepository) FindByGenre(genreId int) ([]*entity.Movie, error
 
     rows, err := r.db.Query(query, genreId)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("%w: select movies by genre: %w", customerrors.ErrDB, err)
     }
     defer rows.Close()
 
@@ -106,13 +112,16 @@ func (r *SQLiteMovieRepository) FindByGenre(genreId int) ([]*entity.Movie, error
         m := &entity.Movie{}
         err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
         if err != nil {
-            return nil, err
+            if errors.Is(err, sql.ErrNoRows) {
+                return nil, fmt.Errorf("%w: not found (genreId=%d): %w", customerrors.ErrNotFound, genreId, err)
+            }
+            return nil, fmt.Errorf("%w: scan movie row: %w", customerrors.ErrDB, err)
         }
         foundMovies = append(foundMovies, m)
     }
 
     if err = rows.Err(); err != nil {
-        return nil, err
+        return nil, fmt.Errorf("%w: iterate movie rows: %w", customerrors.ErrDB, err)
     } 
 
     if err := r.populateRelations(foundMovies); err != nil {
@@ -128,7 +137,7 @@ func (r *SQLiteMovieRepository) FindByYear(year int) ([]*entity.Movie, error) {
 
     rows, err := r.db.Query(query, year)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("%w: select movies by year: %w", customerrors.ErrDB, err)
     }
     defer rows.Close()
 
@@ -138,14 +147,16 @@ func (r *SQLiteMovieRepository) FindByYear(year int) ([]*entity.Movie, error) {
         m := &entity.Movie{}
 
         if err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration); err != nil {
-            return nil, err
+            if errors.Is(err, sql.ErrNoRows) {
+                return nil, fmt.Errorf("%w: not found (year=%d): %w", customerrors.ErrNotFound, year, err)
+            }
+            return nil, fmt.Errorf("%w: scan movie row: %w", customerrors.ErrDB, err)
         }
-
         movies = append(movies, m)
     }
 
     if err = rows.Err(); err != nil {
-        return nil, err
+        return nil, fmt.Errorf("%w: iterate movie rows: %w", customerrors.ErrDB, err)
     }
 
     if err := r.populateRelations(movies); err != nil {
@@ -172,7 +183,7 @@ func (r *SQLiteMovieRepository) FindByActor(actorId int) ([]*entity.Movie, error
 
     rows, err := r.db.Query(query, actorId)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("%w: select movies by actor: %w", customerrors.ErrDB, err)
     }
     defer rows.Close()
 
@@ -182,13 +193,16 @@ func (r *SQLiteMovieRepository) FindByActor(actorId int) ([]*entity.Movie, error
         m := &entity.Movie{}
         err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
         if err != nil {
-            return nil, err
+            if errors.Is(err, sql.ErrNoRows) {
+                return nil, fmt.Errorf("%w: not found (actorId=%d): %w", customerrors.ErrNotFound, actorId, err)
+            }
+            return nil, fmt.Errorf("%w: scan movie row: %w", customerrors.ErrDB, err)
         }
         foundMovies = append(foundMovies, m)
     }
 
     if err = rows.Err(); err != nil {
-        return nil, err
+        return nil, fmt.Errorf("%w: iterate movie rows: %w", customerrors.ErrDB, err)
     } 
 
     if err := r.populateRelations(foundMovies); err != nil {
@@ -217,7 +231,7 @@ func (r *SQLiteMovieRepository) FindActors(id int) ([]entity.Actor, error) {
 func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
     tx, err := r.db.Begin()
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: transaction movie create start: %w", customerrors.ErrDB, err)
     }
 
     defer tx.Rollback()
@@ -226,13 +240,13 @@ func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
     result, err := tx.Exec(queryForMovies, movie.Title, movie.ReleaseYear, movie.Duration)
 
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: insert movie: %w", customerrors.ErrDB, err)
     }
 
     movieId, err := result.LastInsertId()
 
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: get inserted movie id: %w", customerrors.ErrDB, err)
     }
 
     queryForMovieActors := `INSERT INTO movie_actors (movie_id, actor_id) VALUES (?, ?);`
@@ -240,7 +254,11 @@ func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
     for _, actor := range movie.Actors {
         _, err := tx.Exec(queryForMovieActors, movieId, actor.Id)
         if err != nil {
-            return 0, fmt.Errorf("failed inserting actor id %v, %w", actor.Id, err)
+            var sqliteErr sqlite3.Error
+            if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey  {
+                return 0, fmt.Errorf("%w: non existing (actorId=%d): %w", customerrors.ErrInvalidReference, actor.Id, err)
+            }
+            return 0, fmt.Errorf("%w: insert movie_actors (movie=%d, actor=%d): %w", customerrors.ErrDB, movieId, actor.Id, err)
         }        
     }
     
@@ -249,13 +267,17 @@ func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
     for _, genre := range movie.Genres {
         _, err := tx.Exec(queryForMovieGenres, movieId, genre.Id)
         if err != nil {
-            return 0, fmt.Errorf("failed inserting genre id %v,%w", genre.Id, err)
-        }        
+            var sqliteErr sqlite3.Error
+            if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey  {
+                return 0, fmt.Errorf("%w: non existing (genreId=%d): %w", customerrors.ErrInvalidReference, genre.Id, err)
+            }
+            return 0, fmt.Errorf("%w: insert movie_genres (movie=%d, genre=%d): %w", customerrors.ErrDB, movieId, genre.Id, err)
+        }      
     }    
     
     err = tx.Commit()
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: transaction movie create commit: %w", customerrors.ErrDB, err)
     }
 
     movie.Id = uint(movieId)    
@@ -267,7 +289,7 @@ func (r *SQLiteMovieRepository) Update(id int, newData *entity.Movie) (int64, er
 
     tx, err := r.db.Begin()
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: transaction movie start: %w", customerrors.ErrDB, err)
     }
     defer tx.Rollback()
 
@@ -278,49 +300,83 @@ func (r *SQLiteMovieRepository) Update(id int, newData *entity.Movie) (int64, er
     result, err := tx.Exec(queryForMovies, newData.Title, newData.ReleaseYear, newData.Duration, id)  
     
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: update movie (movie=%d): %w", customerrors.ErrDB, id, err)
     }                    
 
     rows, err := result.RowsAffected()
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: iget affected rows for movie update: %w", customerrors.ErrDB, rows, err)
     }
 
     if rows == 0 {
-        return 0, fmt.Errorf("movie with id %d not found", id)
+        return 0, fmt.Errorf("%w: movie does not exist (movie=%d) %w", customerrors.ErrNotFound, err)
     }    
 
     _, err = tx.Exec(`DELETE FROM movie_actors WHERE movie_id = ?`, id)
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: delete movie_actor failed (movie_id=%d) %w", customerrors.ErrDB, id, err)
     }   
 
     _, err = tx.Exec(`DELETE FROM movie_genres WHERE movie_id = ?`, id)
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: delete movie_genre failed (movie_id=%d) %w", customerrors.ErrDB, id, err)
     }   
 
 
     queryForMovieActors := `INSERT INTO movie_actors (movie_id, actor_id) VALUES (?, ?);`    
 
-    for _, actor := range newData.Actors {
-        _, err := tx.Exec(queryForMovieActors, id, actor.Id)
-        if err != nil {
-            return 0, err
-        }
-    }
+	for _, actor := range newData.Actors {
+		_, err := tx.Exec(queryForMovieActors, id, actor.Id)
+		if err != nil {
+			var sqliteErr sqlite3.Error
+			if errors.As(err, &sqliteErr) &&
+				sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
+				return 0, fmt.Errorf(
+					"%w: non existing (actorId=%d): %w",
+					customerrors.ErrInvalidReference,
+					actor.Id,
+					err,
+				)
+			}
+
+			return 0, fmt.Errorf(
+				"%w: insert movie_actors (movie=%d, actor=%d): %w",
+				customerrors.ErrDB,
+				id,
+				actor.Id,
+				err,
+			)
+		}
+	}
     
     queryForMovieGenres := `INSERT INTO movie_genres (movie_id, genre_id) VALUES (?, ?);`     
       
-    for _, genre := range newData.Genres {
-        _, err := tx.Exec(queryForMovieGenres, id, genre.Id)
-        if err != nil {
-            return 0, err
-        }
-    }
+	for _, genre := range newData.Genres {
+		_, err := tx.Exec(queryForMovieGenres, id, genre.Id)
+		if err != nil {
+			var sqliteErr sqlite3.Error
+			if errors.As(err, &sqliteErr) &&
+				sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
+				return 0, fmt.Errorf(
+					"%w: non existing (genreId=%d): %w",
+					customerrors.ErrInvalidReference,
+					genre.Id,
+					err,
+				)
+			}
+
+			return 0, fmt.Errorf(
+				"%w: insert movie_genres (movie=%d, genre=%d): %w",
+				customerrors.ErrDB,
+				id,
+				genre.Id,
+				err,
+			)
+		}
+	}
 
     if err := tx.Commit(); err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: transaction movie update commit: %w", customerrors.ErrDB, err)
     }
 
     return rows, nil
@@ -329,7 +385,7 @@ func (r *SQLiteMovieRepository) Update(id int, newData *entity.Movie) (int64, er
 func (r *SQLiteMovieRepository) Delete(id int) (int64, error) {
     tx, err := r.db.Begin()
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: transaction movie delete start: %w", customerrors.ErrDB, err)
     }
     defer tx.Rollback()
 
@@ -339,30 +395,30 @@ func (r *SQLiteMovieRepository) Delete(id int) (int64, error) {
 
     _, err = tx.Exec(queryMovieActorsTable, id)
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: delete movie_actors (movie=%d): %w", customerrors.ErrDB, id, err)
     }
 
     _, err = tx.Exec(queryMovieGenresTable, id)
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: delete movie_genres (movie=%d): %w", customerrors.ErrDB, id, err)
     }   
 
     result, err := tx.Exec(queryForMoviesTable, id)
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: delete movies (movie=%d): %w", customerrors.ErrDB, id, err)
     }
 
     rows, err := result.RowsAffected()
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: get affected rows after movie delete: %w", customerrors.ErrDB, err)
     }
 
     if rows == 0 {
-        return 0, fmt.Errorf("movie with id %d not found", id)
+        return 0, fmt.Errorf("%w: movie does not exist (movie=%d)", customerrors.ErrNotFound, id)
     }
 
     if err := tx.Commit(); err != nil {
-        return 0, err
+        return 0, fmt.Errorf("%w: transaction movie delete commit:  %w", customerrors.ErrDB, err)
     }
 
     return rows, nil
@@ -435,7 +491,7 @@ func (r *SQLiteMovieRepository) GetActorsByMovieIds(movieIds []uint) (map[uint][
 
     rows, err := r.db.Query(queryMoviesAndActors, args...)
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("%w: select actors by movie ids=%v: %w", customerrors.ErrDB, movieIds, err)
     }
     defer rows.Close()
 
@@ -447,20 +503,30 @@ func (r *SQLiteMovieRepository) GetActorsByMovieIds(movieIds []uint) (map[uint][
         )
 
         if err := rows.Scan(&movieId, &actor.Id, &actor.Name, &birthdate); err !=nil {
-            return nil, err
+			return nil, fmt.Errorf("%w: scan actor for movie=%d: %w", customerrors.ErrDB, movieId, err)
         }
 
         actor.BirthDate, err = time.Parse("2006-01-02", birthdate)
 
         if err != nil {
-            return nil, err
+			return nil, fmt.Errorf("%w: invalid actor birthdate (actor=%d, value=%s): %w",
+                customerrors.ErrInvalidReference,
+				actor.Id,
+				birthdate,
+				err,
+			)
         }
 
         actorsByMovie[movieId] = append(actorsByMovie[movieId], actor)
     }    
 
     if err := rows.Err(); err != nil {
-        return nil, err
+		return nil, fmt.Errorf(
+			"%w: iterate actors by movie ids=%v: %w",
+			customerrors.ErrDB,
+			movieIds,
+			err,
+		)
     }    
 
     return actorsByMovie, nil
@@ -496,7 +562,7 @@ func (r *SQLiteMovieRepository) GetGenresByMovieIds(movieIds []uint) (map[uint][
 
     rows, err := r.db.Query(queryMovieGenres, args...)
     if err != nil {
-        return nil, err
+		return nil, fmt.Errorf("%w: select genres by movie ids=%v: %w",	customerrors.ErrDB,	movieIds, err)
     }
     defer rows.Close()    
 
@@ -507,14 +573,14 @@ func (r *SQLiteMovieRepository) GetGenresByMovieIds(movieIds []uint) (map[uint][
         )
 
         if err := rows.Scan(&movieId, &genre.Id, &genre.Name); err != nil {
-            return nil, err
+			return nil, fmt.Errorf("%w: scan genre for movie=%d: %w", customerrors.ErrDB, movieId,err)
         }
 
         genresByMovie[movieId] = append(genresByMovie[movieId], genre)
     }
 
     if err := rows.Err(); err != nil {
-        return nil, err
+		return nil, fmt.Errorf("%w: iterate genres by movie ids=%v: %w", customerrors.ErrDB,	movieIds, err)
     }    
 
     return genresByMovie, nil
