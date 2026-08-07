@@ -28,36 +28,7 @@ func (h *MovieHandler) Get(w http.ResponseWriter, r *http.Request) *customerrors
 		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
 	}
 
-	var (
-		movies []*entity.Movie
-		err    error
-	)
-
-	actorIdStr := r.URL.Query().Get("actor")
-	genreIdStr := r.URL.Query().Get("genre")
-	yearStr := r.URL.Query().Get("year")
-
-	if actorIdStr != "" {
-		actorIdInt, convertErr := strconv.Atoi(actorIdStr)
-		if convertErr != nil || actorIdInt <= 0 {
-			return &customerrors.HttpError{Message: "actor id should be positive number", Code: http.StatusBadRequest}
-		}
-		movies, err = h.service.FindMoviesByActor(actorIdInt)
-	} else if genreIdStr != "" {
-		genreIdInt, convertErr := strconv.Atoi(genreIdStr)
-		if convertErr != nil || genreIdInt <= 0 {
-			return &customerrors.HttpError{Message: "genre id should be positive number", Code: http.StatusBadRequest}
-		}
-		movies, err = h.service.FindMoviesByGenre(genreIdInt)
-	} else if yearStr != "" {
-		yearInt, convertErr := strconv.Atoi(yearStr)
-		if convertErr != nil || yearInt <= 0 {
-			return &customerrors.HttpError{Message: "release year should be positive number", Code: http.StatusBadRequest}
-		}
-		movies, err = h.service.FindMoviesByYear(yearInt)
-	} else {
-		movies, err = h.service.GetAllMovies()
-	}
+	movies, err := h.getMovies(r)
 
 	if err != nil {
 		return errorResponse(err)
@@ -74,6 +45,41 @@ func (h *MovieHandler) Get(w http.ResponseWriter, r *http.Request) *customerrors
 	w.Write(response)
 
 	return nil
+
+}
+
+func (h *MovieHandler) getMovies(r *http.Request) ([]*entity.Movie, error) {
+	params := r.URL.Query()
+
+	var (
+		movies []*entity.Movie
+		err error
+	)
+
+	switch {
+	case params.Get("actor") != "":
+		id, err := parseIdFromParam(params.Get("actor"), "actor id")
+		if err != nil {
+			return nil, err
+		}
+		movies, err = h.service.FindMoviesByActor(id)
+	case params.Get("genre") != "":
+		id, err := parseIdFromParam(params.Get("genre"), "genre id")
+		if err != nil {
+			return nil, err
+		}
+		movies, err = h.service.FindMoviesByGenre(id)
+	case params.Get("year") != "":
+		id, err := parseIdFromParam(params.Get("year"), "release year")
+		if err != nil {
+			return nil, err
+		}
+		movies, err = h.service.FindMoviesByYear(id)
+	default:
+		movies, err = h.service.GetAllMovies()
+	}
+
+	return movies, err
 
 }
 
@@ -146,18 +152,15 @@ func (h *MovieHandler) Create(w http.ResponseWriter, r *http.Request) *customerr
 		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
 	}
 
-	actorIdStr := r.URL.Query().Get("actors")
-	genreIdStr := r.URL.Query().Get("genres")
-
-	actorIds, errA := getIdsFromParam(actorIdStr)
-	genreIds, errG := getIdsFromParam(genreIdStr)
+	actorIds, errA := parseIdsFromParam(r.URL.Query().Get("actors"))
+	genreIds, errG := parseIdsFromParam(r.URL.Query().Get("genres"))
 
 	if errA != nil {
-		return &customerrors.HttpError{Message: errA.Error(), Code: http.StatusBadRequest}
+		return &customerrors.HttpError{Message: "invlaid actor id provided", Code: http.StatusBadRequest}
 	}
 
 	if errG != nil {
-		return &customerrors.HttpError{Message: errG.Error(), Code: http.StatusBadRequest}
+		return &customerrors.HttpError{Message: "invlaid genre id provided", Code: http.StatusBadRequest}
 	}
 
 	var movie entity.Movie
@@ -200,36 +203,32 @@ func (h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *customerr
 		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
 	}
 
-	movieIdStr := r.PathValue("id")
-	movieIdInt, err := strconv.Atoi(movieIdStr)
-
-	if err != nil || movieIdInt <= 0 {
-		return &customerrors.HttpError{Message: "invalid movie id", Code: http.StatusBadRequest}
+	movieId, err := parseIdFromParam(r.PathValue("id"), "movie id")
+	if err != nil {
+		return errorResponse(err)
 	}
-
+	
 	var newData *entity.Movie
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	jsonErr := decoder.Decode(&newData)
+	err = decoder.Decode(&newData)
 
-	if jsonErr != nil {
-		return &customerrors.HttpError{Message: jsonErr.Error(), Code: http.StatusBadRequest}
+	if err != nil {
+		return &customerrors.HttpError{Message: "invalid request body", Code: http.StatusBadRequest}
 	}
 
 	if err := newData.ValidateMovie(); err != nil {
 		return &customerrors.HttpError{Message: err.Error(), Code: http.StatusBadRequest}
 	}	
 
-	_, updateErr := h.service.UpdateMovie(movieIdInt, newData)
-
-	fmt.Println(updateErr)
+	_, updateErr := h.service.UpdateMovie(movieId, newData)
 
 	if updateErr != nil {
 		return errorResponse(updateErr)
 	}
 
-	movie, err := h.service.GetMovieById(movieIdInt)
+	movie, err := h.service.GetMovieById(movieId)
 
 	if err != nil {
 		return errorResponse(err)
@@ -329,7 +328,20 @@ func (h *MovieHandler) FilterBy(w http.ResponseWriter, r *http.Request) *custome
 }
 
 // helper
-func getIdsFromParam(param string) ([]int, error) {
+func parseIdFromParam(param, paramName string) (int, error) {
+	id, err := strconv.Atoi(param)
+
+	message := fmt.Sprintf("%s should be positive number", paramName)
+	code := http.StatusBadRequest
+
+	if err != nil || id<=0 {
+		return 0, &customerrors.HttpError{Message: message, Code: code}
+	}
+
+	return id, nil
+}
+
+func parseIdsFromParam(param string) ([]int, error) {
 	if len(param) == 0 {
 		return []int{}, nil
 	}
@@ -341,7 +353,7 @@ func getIdsFromParam(param string) ([]int, error) {
 	for _, val := range paramArr {
 		id, err := strconv.Atoi(val)
 		if err != nil || id <= 0 {
-			return nil, fmt.Errorf("invalid id provided: %v", id)
+			return nil, fmt.Errorf("invalid id %q", val)
 		}
 		ids = append(ids, id)
 	}
@@ -353,6 +365,12 @@ func errorResponse(err error) *customerrors.HttpError {
 	if err == nil {
 		return nil
 	}
+
+	var httpErr *customerrors.HttpError
+	if errors.As(err, &httpErr) {
+		return httpErr
+	}
+
 
 	switch {
 	case errors.Is(err, customerrors.ErrDB):
@@ -372,7 +390,7 @@ func errorResponse(err error) *customerrors.HttpError {
 		}
 	case errors.Is(err, customerrors.ErrInvalidReference):
 		return &customerrors.HttpError{
-			Message: "invalid data",
+			Message: "non existing id passed",
 			Code:    http.StatusBadRequest,
 		}		
 	default:
