@@ -20,7 +20,7 @@ func NewSQLiteMovieRepository(db *sql.DB) *SQLiteMovieRepository{
 }
 
 type MovieRepository interface {
-    FindAll() ([]*entity.Movie, error)
+    FindAll(page, size int) ([]*entity.Movie, error)
     FindById(id int) (*entity.Movie, error)
     FindByGenre(genreId int) ([]*entity.Movie, error)	   
     FindByYear(year int) ([]*entity.Movie, error)
@@ -29,14 +29,17 @@ type MovieRepository interface {
     Create(movie *entity.Movie) (int64, error)
     Update(id int, newData *entity.Movie) (int64, error)
     Delete(id int) (int64, error)
-    //extra method
-    FilterBy(movieId, actorId, genreId, year int) ([]*entity.Movie, error)
+    //extra
+    FindByExactTitle(title string) (*entity.Movie, error) 
+    FindByTitleContains(title string) ([]*entity.Movie, error)
 }
 
-func (r *SQLiteMovieRepository) FindAll() ([]*entity.Movie, error) {
-    queryMoviesTable := `SELECT * FROM movies ORDER BY Id`
+func (r *SQLiteMovieRepository) FindAll(page, size int) ([]*entity.Movie, error) {
+    offset := page * size
 
-    rows, err := r.db.Query(queryMoviesTable)
+    queryMoviesTable := `SELECT * FROM movies ORDER BY Id LIMIT ? OFFSET ?`
+
+    rows, err := r.db.Query(queryMoviesTable, size, offset)
     if err != nil {
         return nil, fmt.Errorf("%w: select movies: %w", customerrors.ErrDB, err)
     }
@@ -425,39 +428,58 @@ func (r *SQLiteMovieRepository) Delete(id int) (int64, error) {
 }
 
 //extra
-func (r *SQLiteMovieRepository) FilterBy(movieId, actorId, genreId, year int) ([]*entity.Movie, error) {
+func (r *SQLiteMovieRepository) FindByExactTitle(title string) (*entity.Movie, error) {
+    queryMoviesTable := `SELECT * FROM movies WHERE Title = ?`
+    
+    row := r.db.QueryRow(queryMoviesTable, title)
+    movie := &entity.Movie{}
 
-    movies, err := r.FindAll()
-
+    err := row.Scan(&movie.Id,&movie.Title,&movie.ReleaseYear, &movie.Duration)
     if err != nil {
+        if errors.Is(err, sql.ErrNoRows) {
+            return nil, nil
+        }
+        return nil, fmt.Errorf("%w: select movie by id: %w", customerrors.ErrDB, err)
+    }
+
+    if err := r.populateRelations([]*entity.Movie{movie}); err != nil {
         return nil, err
     }
 
-    if movieId == 0 && actorId == 0 && genreId == 0 && year == 0 {
-        return movies, nil
+    return movie, nil
+
+}
+
+func (r *SQLiteMovieRepository) FindByTitleContains(title string) ([]*entity.Movie, error) {
+    queryMoviesTable := `SELECT * FROM movies WHERE LOWER(title) LIKE ? ORDER BY Id`
+    
+    rows, err := r.db.Query(queryMoviesTable, "%"+title+"%")
+    if err != nil {
+        return nil, fmt.Errorf("%w: select movies: %w", customerrors.ErrDB, err)
+    }
+    defer rows.Close()
+
+    movies := []*entity.Movie{}
+
+    for rows.Next() {
+        m := &entity.Movie{}
+        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
+        if err != nil {
+            return nil, fmt.Errorf("%w: scan movie row: %w", customerrors.ErrDB, err)
+        }
+        movies = append(movies, m)
     }
 
-    filtered := []*entity.Movie{}
-
-    for _, movie := range movies {      
-        if movieId != 0 && movie.Id != uint(movieId) {
-            continue
-        }  
-
-        if actorId != 0 && !containsActor(movie.Actors, actorId) {
-            continue
-        }        
-        if genreId != 0 && !containsGenre(movie.Genres, genreId) {
-            continue
-        }      
-        if year != 0 && movie.ReleaseYear != year {
-            continue
-        }                  
-
-        filtered = append(filtered, movie)
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("%w: iterate movie rows: %w", customerrors.ErrDB, err)
     }
 
-    return filtered, nil
+    if err := r.populateRelations(movies); err != nil {
+        return nil, err
+    }
+
+    return movies, nil
+
 }
 
 //Helpers

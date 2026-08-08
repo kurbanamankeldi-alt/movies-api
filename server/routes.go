@@ -25,9 +25,9 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 	genreHandler := handler.NewGenreHandler(genreService)
 
 	mux.Handle("GET /api/movie", customerrors.HttpErrorHandler(movieHandler.Get))
+	mux.Handle("GET /api/movie/search", customerrors.HttpErrorHandler(movieHandler.Search))
 	mux.Handle("GET /api/movie/{id}", customerrors.HttpErrorHandler(movieHandler.GetById))
 	mux.Handle("GET /api/movie/{id}/actors", customerrors.HttpErrorHandler(movieHandler.GetActorsById))
-	mux.Handle("GET /api/movie/filter", customerrors.HttpErrorHandler(movieHandler.FilterBy))
 	mux.Handle("POST /api/movie", customerrors.HttpErrorHandler(movieHandler.Create))
 
 	mux.Handle("GET /api/actors", customerrors.HttpErrorHandler(actorHandler.GetAll))

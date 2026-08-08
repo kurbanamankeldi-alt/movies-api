@@ -28,13 +28,32 @@ func (h *MovieHandler) Get(w http.ResponseWriter, r *http.Request) *customerrors
 		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
 	}
 
-	movies, err := h.getMovies(r)
-
+	page, err := parsePageAndSize(r.URL.Query().Get("page"), "page")
+	if err != nil {
+		return errorResponse(err)
+	}
+	
+	size, err := parsePageAndSize(r.URL.Query().Get("size"), "size")
 	if err != nil {
 		return errorResponse(err)
 	}
 
-	response, err := json.Marshal(movies)
+	movies, err := h.getMovies(r, page, size)
+	if err != nil {
+		return errorResponse(err)
+	}
+
+	responseBody := struct {
+		Page   int         
+		Size   int        
+		Movies []*entity.Movie
+	}{
+		Page:   page,
+		Size:   size,
+		Movies: movies,
+	}	
+
+	response, err := json.Marshal(responseBody)
 
 	if err != nil {
 		return &customerrors.HttpError{Message: "failed to encode JSON", Code: http.StatusInternalServerError}
@@ -48,7 +67,7 @@ func (h *MovieHandler) Get(w http.ResponseWriter, r *http.Request) *customerrors
 
 }
 
-func (h *MovieHandler) getMovies(r *http.Request) ([]*entity.Movie, error) {
+func (h *MovieHandler) getMovies(r *http.Request, page, size int) ([]*entity.Movie, error) {
 	params := r.URL.Query()
 
 	var (
@@ -76,7 +95,7 @@ func (h *MovieHandler) getMovies(r *http.Request) ([]*entity.Movie, error) {
 		}
 		movies, err = h.service.FindMoviesByYear(id)
 	default:
-		movies, err = h.service.GetAllMovies()
+		movies, err = h.service.GetAllMovies(page, size)
 	}
 
 	return movies, err
@@ -264,71 +283,58 @@ func (h *MovieHandler) Delete(w http.ResponseWriter, r *http.Request) *customerr
 }
 
 // extra
-func (h *MovieHandler) FilterBy(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
+func (h *MovieHandler) Search(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
 	if r.Method != http.MethodGet {
 		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
 	}
 
-	idStr := r.URL.Query().Get("id")
-	actorIdStr := r.URL.Query().Get("actorId")
-	genreIdStr := r.URL.Query().Get("genreId")
-	yearStr := r.URL.Query().Get("year")
+    title := r.URL.Query().Get("title")
 
-	if idStr == "" && actorIdStr == "" && genreIdStr == "" && yearStr == "" {
-		return h.Get(w, r)
-	}
-
-	var (
-		id, actorId, genreId, year             int
-		idErr, actorIdErr, genreIdErr, yearErr error
-	)
-
-	if idStr != "" {
-		id, idErr = strconv.Atoi(idStr)
-	}
-	if actorIdStr != "" {
-		actorId, actorIdErr = strconv.Atoi(actorIdStr)
-	}
-	if genreIdStr != "" {
-		genreId, genreIdErr = strconv.Atoi(genreIdStr)
-	}
-	if yearStr != "" {
-		year, yearErr = strconv.Atoi(yearStr)
-	}
-
-	if idErr != nil || actorIdErr != nil || genreIdErr != nil || yearErr != nil {
-		return &customerrors.HttpError{Message: "param should be positive number", Code: http.StatusBadRequest}
-	}
-
-	if (idStr != "" && id <= 0) ||
-		(actorIdStr != "" && actorId <= 0) ||
-		(genreIdStr != "" && genreId <= 0) ||
-		(yearStr != "" && year <= 0) {
-		return &customerrors.HttpError{Message: "param should be positive number", Code: http.StatusBadRequest}
-	}
-
-	movie, err := h.service.FilterMoviesBy(id, actorId, genreId, year)
+	movies, err := h.service.SearchMovies(title)
 
 	if err != nil {
-		return errorResponse(err)
+	 	return errorResponse(err)
 	}
 
-	response, err := json.Marshal(movie)
+	response, err := json.Marshal(movies)
 
 	if err != nil {
 		return &customerrors.HttpError{Message: "failed to encode JSON", Code: http.StatusInternalServerError}
-	}
+	}	
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(response)
 
 	return nil
-
 }
 
 // helper
+func parsePageAndSize(param, paramName string) (int, error) {
+    param = strings.TrimSpace(param)
+    value, err := strconv.Atoi(param)
+
+    if paramName == "page" {
+        if err != nil || value < 0 {
+            return 0, &customerrors.HttpError{
+                Message: "page should be a non-negative number",
+                Code:    http.StatusBadRequest,
+            }
+        }
+    } else if paramName == "size" {
+		if err != nil || value <= 0 || value > 100 {
+			return 0, &customerrors.HttpError{
+				Message: "size should be between 1 and 100",
+				Code:    http.StatusBadRequest,
+			}
+		}
+	}
+
+    return value, nil
+}
+
 func parseIdFromParam(param, paramName string) (int, error) {
+	param = strings.TrimSpace(param)
 	id, err := strconv.Atoi(param)
 
 	message := fmt.Sprintf("%s should be positive number", paramName)
@@ -336,8 +342,8 @@ func parseIdFromParam(param, paramName string) (int, error) {
 
 	if err != nil || id<=0 {
 		return 0, &customerrors.HttpError{Message: message, Code: code}
-	}
-
+	}		
+	
 	return id, nil
 }
 

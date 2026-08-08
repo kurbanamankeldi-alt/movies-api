@@ -26,8 +26,8 @@ func (s *MovieService) GetMovieById(id int) (*entity.Movie, error) {
 	return movie, nil
 }
 
-func (s *MovieService) GetAllMovies() ([]*entity.Movie, error) {
-	movies, err := s.repo.FindAll()
+func (s *MovieService) GetAllMovies(page, size int) ([]*entity.Movie, error) {
+	movies, err := s.repo.FindAll(page, size)
 
 	if err != nil {
 		return nil, err
@@ -89,16 +89,6 @@ func (s *MovieService) CreateMovie(movie *entity.Movie) (int64, error) {
 	return createdId, nil
 }
 
-func (s *MovieService) FilterMoviesBy(movieId, actorId, genreId, year int)  ([]*entity.Movie, error) {
-	movies, err := s.repo.FilterBy(movieId, actorId, genreId, year)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return movies, nil	
-}
-
 func (s *MovieService) UpdateMovie(id int, newData *entity.Movie) (int64, error) {
 	updatedRow, err := s.repo.Update(id, newData)
 
@@ -117,4 +107,21 @@ func (s *MovieService) DeleteMovie(id int) (int64, error) {
 	}
 
 	return updatedRow, nil
+}
+
+//extra
+func (s *MovieService) SearchMovies(title string) ([]*entity.Movie, error) {
+	title = strings.ToLower(strings.TrimSpace(title))
+	exactMatch := strings.Title(title)
+
+	movie, err := s.repo.FindByExactTitle(exactMatch)
+	if err != nil {
+		return nil, err
+	}
+
+	if movie != nil {
+		return []*entity.Movie{movie}, nil
+	}
+
+	return s.repo.FindByTitleContains(title)	
 }
