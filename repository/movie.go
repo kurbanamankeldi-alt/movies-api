@@ -345,7 +345,7 @@ func (r *SQLiteMovieRepository) Update(id int, newData *entity.Movie) (int64, er
     }
 
     if rows == 0 {
-        return 0, fmt.Errorf("%w: movie does not exist (movie=%d) %w", customerrors.ErrNotFound, err)
+        return 0, fmt.Errorf("%w: movie does not exist (movie=%d) %w", customerrors.ErrNotFound, id, err)
     }    
 
     _, err = tx.Exec(`DELETE FROM movie_actors WHERE movie_id = ?`, id)
