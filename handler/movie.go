@@ -28,32 +28,28 @@ func (h *MovieHandler) Get(w http.ResponseWriter, r *http.Request) *customerrors
 		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
 	}
 
-	page, err := parsePageAndSize(r.URL.Query().Get("page"), "page")
-	if err != nil {
-		return errorResponse(err)
-	}
-	
-	size, err := parsePageAndSize(r.URL.Query().Get("size"), "size")
+	movies, page, size, err := h.getMovies(r)
 	if err != nil {
 		return errorResponse(err)
 	}
 
-	movies, err := h.getMovies(r, page, size)
-	if err != nil {
-		return errorResponse(err)
-	}
+	var response []byte
 
-	responseBody := struct {
-		Page   int         
-		Size   int        
+	responseWith := struct {
+		Page   int
+		Size   int
 		Movies []*entity.Movie
 	}{
 		Page:   page,
 		Size:   size,
 		Movies: movies,
-	}	
+	}
 
-	response, err := json.Marshal(responseBody)
+	if page == 0 && size == 0 {
+		response, err = json.Marshal(movies)
+	} else {
+		response, err = json.Marshal(responseWith)
+	}
 
 	if err != nil {
 		return &customerrors.HttpError{Message: "failed to encode JSON", Code: http.StatusInternalServerError}
@@ -67,39 +63,59 @@ func (h *MovieHandler) Get(w http.ResponseWriter, r *http.Request) *customerrors
 
 }
 
-func (h *MovieHandler) getMovies(r *http.Request, page, size int) ([]*entity.Movie, error) {
+func (h *MovieHandler) getMovies(r *http.Request) ([]*entity.Movie, int, int, error) {
 	params := r.URL.Query()
-
-	var (
-		movies []*entity.Movie
-		err error
-	)
-
+	
 	switch {
 	case params.Get("actor") != "":
 		id, err := parseIdFromParam(params.Get("actor"), "actor id")
 		if err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
-		movies, err = h.service.FindMoviesByActor(id)
+
+		movies, err := h.service.FindMoviesByActor(id)
+		return movies, 0, 0, err
+
 	case params.Get("genre") != "":
 		id, err := parseIdFromParam(params.Get("genre"), "genre id")
 		if err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
-		movies, err = h.service.FindMoviesByGenre(id)
+
+		movies, err := h.service.FindMoviesByGenre(id)
+		return movies, 0, 0, err
+
 	case params.Get("year") != "":
 		id, err := parseIdFromParam(params.Get("year"), "release year")
 		if err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
-		movies, err = h.service.FindMoviesByYear(id)
+
+		movies, err := h.service.FindMoviesByYear(id)
+		return movies, 0, 0, err
+
 	default:
-		movies, err = h.service.GetAllMovies(page, size)
+		pageStr := strings.TrimSpace(params.Get("page"))
+		sizeStr := strings.TrimSpace(params.Get("size"))
+
+		if pageStr == "" && sizeStr == "" {
+			movies, err := h.service.GetAllMovies()
+			return movies, 0, 0, err
+		}
+
+		page, err := parsePageAndSize(pageStr, "page")
+		if err != nil {
+			return nil, 0, 0, err
+		}
+
+		size, err := parsePageAndSize(sizeStr, "size")
+		if err != nil {
+			return nil, 0, 0, err
+		}
+
+		movies, err := h.service.GetMoviesWithPagination(page, size)
+		return movies, page, size, err
 	}
-
-	return movies, err
-
 }
 
 func (h *MovieHandler) GetById(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
@@ -274,7 +290,7 @@ func (h *MovieHandler) Delete(w http.ResponseWriter, r *http.Request) *customerr
 	_, deleteErr := h.service.DeleteMovie(movieIdInt)
 
 	if deleteErr != nil {
-		return errorResponse(err)
+		return errorResponse(deleteErr)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

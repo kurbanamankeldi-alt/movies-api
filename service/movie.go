@@ -26,8 +26,19 @@ func (s *MovieService) GetMovieById(id int) (*entity.Movie, error) {
 	return movie, nil
 }
 
-func (s *MovieService) GetAllMovies(page, size int) ([]*entity.Movie, error) {
-	movies, err := s.repo.FindAll(page, size)
+
+func (s *MovieService) GetAllMovies() ([]*entity.Movie, error) {
+	movies, err := s.repo.FindAll()
+
+	if err != nil {
+		return nil, err
+	}
+	
+	return movies, nil
+}
+
+func (s *MovieService) GetMoviesWithPagination(page, size int) ([]*entity.Movie, error) {
+	movies, err := s.repo.FindWithPagination(page, size)
 
 	if err != nil {
 		return nil, err

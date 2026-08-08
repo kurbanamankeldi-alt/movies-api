@@ -20,7 +20,8 @@ func NewSQLiteMovieRepository(db *sql.DB) *SQLiteMovieRepository{
 }
 
 type MovieRepository interface {
-    FindAll(page, size int) ([]*entity.Movie, error)
+    FindAll() ([]*entity.Movie, error)
+    FindWithPagination(page, size int) ([]*entity.Movie, error)
     FindById(id int) (*entity.Movie, error)
     FindByGenre(genreId int) ([]*entity.Movie, error)	   
     FindByYear(year int) ([]*entity.Movie, error)
@@ -34,7 +35,39 @@ type MovieRepository interface {
     FindByTitleContains(title string) ([]*entity.Movie, error)
 }
 
-func (r *SQLiteMovieRepository) FindAll(page, size int) ([]*entity.Movie, error) {
+func (r *SQLiteMovieRepository) FindAll() ([]*entity.Movie, error) {
+    queryMoviesTable := `SELECT * FROM movies ORDER BY Id`
+
+    rows, err := r.db.Query(queryMoviesTable)
+    if err != nil {
+        return nil, fmt.Errorf("%w: select movies: %w", customerrors.ErrDB, err)
+    }
+    defer rows.Close()
+
+    movies := []*entity.Movie{}
+
+    for rows.Next() {
+        m := &entity.Movie{}
+        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
+        if err != nil {
+            return nil, fmt.Errorf("%w: scan movie row: %w", customerrors.ErrDB, err)
+        }
+        movies = append(movies, m)
+    }
+
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("%w: iterate movie rows: %w", customerrors.ErrDB, err)
+    }
+
+    if err := r.populateRelations(movies); err != nil {
+        return nil, err
+    }
+
+    return movies, nil
+
+}
+
+func (r *SQLiteMovieRepository) FindWithPagination(page, size int) ([]*entity.Movie, error) {
     offset := page * size
 
     queryMoviesTable := `SELECT * FROM movies ORDER BY Id LIMIT ? OFFSET ?`
