@@ -10,6 +10,7 @@ type Actor struct {
 	Id        uint
 	Name      string
 	BirthDate time.Time
+	Version   int
 
 	Movies   []Movie `json:"movies,omitempty"`
 	MovieIds []int   `json:"movieIds,omitempty"`
