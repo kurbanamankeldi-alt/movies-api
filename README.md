@@ -1,7 +1,6 @@
 # Movies API — Actor & Genre module (WIP)
 
-This covers the **Actor** and **Genre** entities of the `movies-api` project. 
-
+This covers the **Actor** and **Genre** entities of the `movies-api` project.
 ## Stack
 
 - Go, `net/http` (built-in router, method-based patterns: `GET /path`, `POST /path`, etc.)
@@ -30,13 +29,14 @@ Repo → service → handler wiring happens in `routes.go`, inside `RegisterRout
 | `GET` | `/api/actors?movies=true` | List all actors, each including their filmography |
 | `GET` | `/api/actors?name={name}` | Search by name, partial case-insensitive match (`LIKE %name%`). Always includes filmography for each match |
 | `GET` | `/api/actors/{id}` | Actor by id, including filmography |
-| `PATCH` | `/api/actors/{id}` | Partial update: `name`, `birthdate`, `movieIds` — any field can be omitted and won't be changed |
+| `PATCH` | `/api/actors/{id}` | Partial update: `name`, `birthdate`, `movieIds` — any field can be omitted and won't be changed. `version` is required (optimistic locking, see below) |
 | `DELETE` | `/api/actors/{id}` | Delete an actor. If they have movies — 400 with a clear message. `?force=true` deletes the links in `movie_actors` first, then the actor |
 | `DELETE` | `/api/actors/deleteconnection/{id}` | Remove specific movie links from an actor. Body: `{"movieIds": [1, 2]}` — only the listed links are removed, the actor and any other links stay intact |
 
 ### Implementation notes
 
 - **Actor filmography** (`GetMovies`) uses `JOIN movies ON movies.id = movie_actors.movie_id WHERE movie_actors.actor_id = ?` — a single query instead of a loop of individual ones
+- **Dates** are stored in the DB as `TEXT` in `YYYY-MM-DD` format. Instead of a custom `UnmarshalJSON`, `Create` decodes into a separate `ActorCreateRequest` struct (`BirthDate string`), then parses it manually via `time.Parse("2006-01-02", ...)` — avoids fighting the standard JSON decoder's RFC3339 default for `time.Time` fields
 - **Pagination** (`GetAll`) uses `LIMIT ? OFFSET ?` in SQL (`OFFSET = page * size`), plus a separate `SELECT COUNT(*)` for `total`. Requesting a page beyond the data just returns an empty `results` list with `200 OK` (no special-casing needed — SQL handles it naturally)
 - **PATCH** takes a separate `ActorPatchRequest` struct with pointer fields (`*string`, etc.) so "field not provided" can be distinguished from "field provided empty"
 - **Creating movie links** (`Create`/`Update` with `movieIds`) is wrapped in a transaction (`tx.Begin()` / `tx.Commit()` / `defer tx.Rollback()`) — if a link insert fails, everything rolls back, including the created/updated actor
@@ -46,14 +46,14 @@ Repo → service → handler wiring happens in `routes.go`, inside `RegisterRout
 
 ## Genre — implemented functionality
 
-Same CRUD set and same architecture as Actor:
+Same CRUD set and same architecture as Actor. No pagination for Genre (small, fixed set of genres — pagination didn't seem worth the added complexity):
 
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/genres` | Create a genre |
 | `GET` | `/api/genres` | List all genres |
-| `GET` | `/api/genres?movies=true` | List all genres, each including their filmography |
-| `GET` | `/api/genres/{id}` | Genre by id |
+| `GET` | `/api/genres?movies=true` | List all genres, each including its associated movies |
+| `GET` | `/api/genres/{id}` | Genre by id, including its associated movies (always, no flag needed) |
 | `PATCH` | `/api/genres/{id}` | Partial update of the name |
 | `DELETE` | `/api/genres/{id}` | Delete a genre. If it has linked movies — 400, `?force=true` to force delete |
 | `DELETE` | `/api/genres/deleteconnection/{id}` | Remove specific movie links from a genre. Body: `{"movieIds": [1, 2]}` — same pattern as the Actor equivalent |
@@ -62,7 +62,19 @@ Same CRUD set and same architecture as Actor:
 
 Both `entity.Actor` and `entity.Genre` have a `Validate()` method (no external library — hand-written checks), called from the service layer before create/update. Errors from multiple fields are combined via `errors.Join`, so a single call can report several problems at once (e.g. empty name and a birth date in the future).
 
+## Optimistic locking (Actor)
+
+Actors have a `version` column (`INTEGER DEFAULT 1`), returned in every read response. `PATCH` requires `version` in the request body and uses it to detect concurrent edits:
+
+```sql
+UPDATE actors SET name = ?, birthdate = ?, version = version + 1 WHERE id = ? AND version = ?
+```
+
+The check and the write happen in one atomic SQL statement, so there's no gap between "check the version" and "apply the update" for a second request to slip through. If the version in the request doesn't match what's currently in the DB (someone else updated the actor in the meantime), the `UPDATE` matches zero rows and the client gets `409 Conflict` (`entity.ErrVersionConflict`) instead of silently overwriting the other change. A missing/invalid `version` (`< 1`) is rejected upfront with `400 Bad Request` via `ActorPatchRequest.Validate()`.
+
+Not yet applied to Genre.
+
 ## Errors
 
-- Sentinel errors (`entity.ErrNotFound`, `entity.ErrInvalidContent`) are wrapped with `%w` in repository/service errors, so handlers can check the cause via `errors.Is(...)` and pick the right HTTP status (404, 400) instead of always returning 500
+- Sentinel errors (`entity.ErrNotFound`, `entity.ErrInvalidContent`, `entity.ErrHasRelations`, `entity.ErrVersionConflict`) are wrapped with `%w` in repository/service errors, so handlers can check the cause via `errors.Is(...)` and pick the right HTTP status (404, 400, 409) instead of always returning 500
 - All handlers return `*customerrors.HttpError` instead of writing to the response directly; a single `HttpErrorHandler.ServeHTTP` (shared with the Movie module) logs the underlying error and writes the response in one place

@@ -48,6 +48,9 @@ func (s *ActorService) GetByName(name string) ([]entity.Actor, error) {
 	return actors, nil
 }
 func (s *ActorService) Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error) {
+	if err := actor.Validate(); err != nil {
+		return entity.Actor{}, err
+	}
 	if actor.BirthDate != nil {
 		date, err := time.Parse("2006-01-02", *actor.BirthDate)
 		if err != nil {

@@ -45,5 +45,13 @@ type ActorCreateRequest struct {
 type ActorPatchRequest struct {
 	Name      *string
 	BirthDate *string
+	Version   int
 	MovieIds  []int
+}
+
+func (a *ActorPatchRequest) Validate() error {
+	if a.Version < 1 {
+		return fmt.Errorf("%w: version number is required", ErrInvalidContent)
+	}
+	return nil
 }

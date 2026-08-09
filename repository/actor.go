@@ -33,9 +33,9 @@ func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	query := `INSERT INTO actors (name, birthdate) VALUES (?, ?);`
+	query := `INSERT INTO actors (name, birthdate, version) VALUES (?, ?, ?);`
 
-	result, err := tx.Exec(query, actor.Name, actor.BirthDate.Format("2006-01-02"))
+	result, err := tx.Exec(query, actor.Name, actor.BirthDate.Format("2006-01-02"), 1)
 	if err != nil {
 		return 0, err
 	}
@@ -55,8 +55,8 @@ func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
 }
 func (a *SQLiteActorRepository) GetAll(moviesFlag bool, page int, size int, pagination bool) (entity.PaginatedActorResponse, error) {
 	offset := page * size
-	query := `SELECT id, name, birthdate FROM actors`
-	queryPagination := `SELECT id, name, birthdate FROM actors ORDER BY id LIMIT ? OFFSET ?`
+	query := `SELECT id, name, birthdate, version FROM actors`
+	queryPagination := `SELECT id, name, birthdate, version FROM actors ORDER BY id LIMIT ? OFFSET ?`
 	queryCount := `SELECT COUNT(*) FROM actors`
 	var err error
 	var rows *sql.Rows
@@ -73,7 +73,8 @@ func (a *SQLiteActorRepository) GetAll(moviesFlag bool, page int, size int, pagi
 	for rows.Next() {
 		var id uint
 		var name, birthdate string
-		if err := rows.Scan(&id, &name, &birthdate); err != nil {
+		var version int
+		if err := rows.Scan(&id, &name, &birthdate, &version); err != nil {
 			return entity.PaginatedActorResponse{}, err
 		}
 		birthTime, err := time.Parse("2006-01-02", birthdate)
@@ -85,9 +86,9 @@ func (a *SQLiteActorRepository) GetAll(moviesFlag bool, page int, size int, pagi
 			if err != nil {
 				return entity.PaginatedActorResponse{}, err
 			}
-			actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime, Movies: movies})
+			actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime, Version: version, Movies: movies})
 		} else {
-			actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime})
+			actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime, Version: version})
 		}
 	}
 	countActors := 0
@@ -105,10 +106,11 @@ func (a *SQLiteActorRepository) GetAll(moviesFlag bool, page int, size int, pagi
 	return result, nil
 }
 func (a *SQLiteActorRepository) GetByID(id int) (entity.Actor, error) {
-	query := `SELECT name, birthdate FROM actors WHERE id = ?`
+	query := `SELECT name, birthdate, version FROM actors WHERE id = ?`
 	row := a.db.QueryRow(query, id)
 	var name, birthdate string
-	err := row.Scan(&name, &birthdate)
+	var version int
+	err := row.Scan(&name, &birthdate, &version)
 	if err == sql.ErrNoRows {
 		return entity.Actor{}, fmt.Errorf("%w actor id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
@@ -122,10 +124,10 @@ func (a *SQLiteActorRepository) GetByID(id int) (entity.Actor, error) {
 	if err != nil {
 		return entity.Actor{}, err
 	}
-	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime, Movies: movies}, nil
+	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime, Version: version, Movies: movies}, nil
 }
 func (a *SQLiteActorRepository) GetByName(name string) ([]entity.Actor, error) {
-	query := `SELECT id, name, birthdate FROM actors WHERE name LIKE ?`
+	query := `SELECT id, name, birthdate, version FROM actors WHERE name LIKE ?`
 	searchPattern := "%" + name + "%"
 	rows, err := a.db.Query(query, searchPattern)
 	if err != nil {
@@ -135,8 +137,9 @@ func (a *SQLiteActorRepository) GetByName(name string) ([]entity.Actor, error) {
 	actors := []entity.Actor{}
 	for rows.Next() {
 		var id uint
+		var version int
 		var nameActual, birthdate string
-		if err := rows.Scan(&id, &nameActual, &birthdate); err != nil {
+		if err := rows.Scan(&id, &nameActual, &birthdate, &version); err != nil {
 			return []entity.Actor{}, err
 		}
 		birthTime, err := time.Parse("2006-01-02", birthdate)
@@ -147,7 +150,7 @@ func (a *SQLiteActorRepository) GetByName(name string) ([]entity.Actor, error) {
 		if err != nil {
 			return []entity.Actor{}, err
 		}
-		actors = append(actors, entity.Actor{Id: uint(id), Name: nameActual, BirthDate: birthTime, Movies: movies})
+		actors = append(actors, entity.Actor{Id: uint(id), Name: nameActual, BirthDate: birthTime, Version: version, Movies: movies})
 	}
 	return actors, nil
 }
@@ -157,10 +160,11 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 		return entity.Actor{}, err
 	}
 	defer tx.Rollback()
-	query := `SELECT name, birthdate FROM actors WHERE id = ?`
+	query := `SELECT name, birthdate, version FROM actors WHERE id = ?`
 	row := tx.QueryRow(query, id)
 	var name, birthdate string
-	err = row.Scan(&name, &birthdate)
+	var version int
+	err = row.Scan(&name, &birthdate, &version)
 	if err == sql.ErrNoRows {
 		return entity.Actor{}, fmt.Errorf("%w actor id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
@@ -176,15 +180,15 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 	if err != nil {
 		return entity.Actor{}, err
 	}
-	newQuery := `UPDATE actors SET name = ?, birthdate = ? WHERE id = ?`
-	result, err := tx.Exec(newQuery, name, birthTime.Format("2006-01-02"), id)
+	newQuery := `UPDATE actors SET name = ?, birthdate = ?, version = version + 1 WHERE id = ? AND version = ?`
+	result, err := tx.Exec(newQuery, name, birthTime.Format("2006-01-02"), id, actor.Version)
 	if err != nil {
 		return entity.Actor{}, err
 	}
 	//if someone delete this entity before this func updates everything
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return entity.Actor{}, fmt.Errorf("%w actor id: %d", entity.ErrNotFound, id)
+		return entity.Actor{}, fmt.Errorf("%w: actor was updated by someone else, refetch and try again", entity.ErrVersionConflict)
 	}
 	if actor.MovieIds != nil {
 		err := CreateActorConnection(tx, int64(id), actor.MovieIds)
@@ -196,13 +200,14 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 	if err := tx.Commit(); err != nil {
 		return entity.Actor{}, err
 	}
-	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime}, nil
+	return entity.Actor{Id: uint(id), Name: name, BirthDate: birthTime, Version: version + 1}, nil
 }
 func (a *SQLiteActorRepository) Delete(id int, force bool) (int64, error) {
-	query := `SELECT name, birthdate FROM actors WHERE id = ?`
+	query := `SELECT name, birthdate, version FROM actors WHERE id = ?`
 	row := a.db.QueryRow(query, id)
 	var name, birthdate string
-	err := row.Scan(&name, &birthdate)
+	var version int
+	err := row.Scan(&name, &birthdate, &version)
 	if err == sql.ErrNoRows {
 		return 0, fmt.Errorf("%w actor id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
