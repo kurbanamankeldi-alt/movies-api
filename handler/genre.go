@@ -25,6 +25,7 @@ func (h *GenreHandler) Create(w http.ResponseWriter, r *http.Request) *customerr
 	if err != nil {
 		return &customerrors.HttpError{Err: err, Message: "invalid json", Code: http.StatusBadRequest}
 	}
+	genre.Version = 1
 	id, err := h.service.CreateGenre(&genre)
 	genre.Id = uint(id)
 	if err != nil {
@@ -85,6 +86,9 @@ func (h *GenreHandler) Update(w http.ResponseWriter, r *http.Request) *customerr
 	if err != nil {
 		if errors.Is(err, entity.ErrNotFound) {
 			return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusNotFound}
+		}
+		if errors.Is(err, entity.ErrVersionConflict) {
+			return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusConflict}
 		}
 		return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
 	}

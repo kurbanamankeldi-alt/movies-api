@@ -31,8 +31,8 @@ func (g *SQLiteGenreRepository) Create(genre *entity.Genre) (int64, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	query := `INSERT INTO genres (name) VALUES (?);`
-	result, err := tx.Exec(query, genre.Name)
+	query := `INSERT INTO genres (name, version) VALUES (?, ?);`
+	result, err := tx.Exec(query, genre.Name, 1)
 	if err != nil {
 		return 0, err
 	}
@@ -46,12 +46,12 @@ func (g *SQLiteGenreRepository) Create(genre *entity.Genre) (int64, error) {
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return 0, nil
+		return 0, err
 	}
 	return id, nil
 }
 func (g *SQLiteGenreRepository) GetAll(moviesFlag bool) ([]entity.Genre, error) {
-	query := `SELECT id, name FROM genres`
+	query := `SELECT id, name, version FROM genres`
 	rows, err := g.db.Query(query)
 	if err != nil {
 		return []entity.Genre{}, err
@@ -61,7 +61,8 @@ func (g *SQLiteGenreRepository) GetAll(moviesFlag bool) ([]entity.Genre, error) 
 	for rows.Next() {
 		var id uint
 		var name string
-		if err := rows.Scan(&id, &name); err != nil {
+		var version int
+		if err := rows.Scan(&id, &name, &version); err != nil {
 			return []entity.Genre{}, err
 		}
 
@@ -70,18 +71,19 @@ func (g *SQLiteGenreRepository) GetAll(moviesFlag bool) ([]entity.Genre, error) 
 			if err != nil {
 				return []entity.Genre{}, err
 			}
-			genres = append(genres, entity.Genre{Id: id, Name: name, Movies: movies})
+			genres = append(genres, entity.Genre{Id: id, Name: name, Version: version, Movies: movies})
 		} else {
-			genres = append(genres, entity.Genre{Id: id, Name: name})
+			genres = append(genres, entity.Genre{Id: id, Name: name, Version: version})
 		}
 	}
 	return genres, nil
 }
 func (g *SQLiteGenreRepository) GetByID(id int) (entity.Genre, error) {
-	query := `SELECT name FROM genres WHERE id = ?`
+	query := `SELECT name, version FROM genres WHERE id = ?`
 	row := g.db.QueryRow(query, id)
 	var name string
-	err := row.Scan(&name)
+	var version int
+	err := row.Scan(&name, &version)
 	if err == sql.ErrNoRows {
 		return entity.Genre{}, fmt.Errorf("%w genre id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
@@ -91,7 +93,7 @@ func (g *SQLiteGenreRepository) GetByID(id int) (entity.Genre, error) {
 	if err != nil {
 		return entity.Genre{}, err
 	}
-	return entity.Genre{Id: uint(id), Name: name, Movies: movies}, nil
+	return entity.Genre{Id: uint(id), Name: name, Version: version, Movies: movies}, nil
 }
 func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (entity.Genre, error) {
 	tx, err := g.db.Begin()
@@ -99,10 +101,11 @@ func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (
 		return entity.Genre{}, err
 	}
 	defer tx.Rollback()
-	query := `SELECT name FROM genres WHERE id =?`
+	query := `SELECT name, version FROM genres WHERE id =?`
 	row := tx.QueryRow(query, id)
 	var name string
-	err = row.Scan(&name)
+	var version int
+	err = row.Scan(&name, &version)
 	if err == sql.ErrNoRows {
 		return entity.Genre{}, fmt.Errorf("%w genre id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
@@ -111,14 +114,14 @@ func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (
 	if genre.Name != nil {
 		name = *genre.Name
 	}
-	newQuery := `UPDATE genres SET name = ? WHERE id = ?`
-	result, err := tx.Exec(newQuery, name, id)
+	newQuery := `UPDATE genres SET name = ?, version= version+1 WHERE id = ? AND version = ?`
+	result, err := tx.Exec(newQuery, name, id, genre.Version)
 	if err != nil {
 		return entity.Genre{}, err
 	}
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return entity.Genre{}, fmt.Errorf("%w genre id: %d", entity.ErrNotFound, id)
+		return entity.Genre{}, fmt.Errorf("%w: genre was updated by someone else, refetch and try again", entity.ErrVersionConflict)
 	}
 	if genre.MovieIds != nil {
 		err := CreateGenreConnection(tx, int64(id), genre.MovieIds)
@@ -129,13 +132,14 @@ func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (
 	if err := tx.Commit(); err != nil {
 		return entity.Genre{}, err
 	}
-	return entity.Genre{Id: uint(id), Name: name}, nil
+	return entity.Genre{Id: uint(id), Name: name, Version: genre.Version + 1}, nil
 }
 func (g *SQLiteGenreRepository) Delete(id int, force bool) (int64, error) {
-	query := `SELECT name FROM genres WHERE id = ?`
+	query := `SELECT name, version FROM genres WHERE id = ?`
 	row := g.db.QueryRow(query, id)
 	var name string
-	err := row.Scan(&name)
+	var version int
+	err := row.Scan(&name, &version)
 	if err == sql.ErrNoRows {
 		return 0, fmt.Errorf("%w genre id: %d", entity.ErrNotFound, id)
 	} else if err != nil {
@@ -147,7 +151,7 @@ func (g *SQLiteGenreRepository) Delete(id int, force bool) (int64, error) {
 		return 0, err
 	}
 	if countFilms > 0 && !force {
-		return 0, fmt.Errorf("%w: %s in %d films", entity.ErrHasRelations, name, id)
+		return 0, fmt.Errorf("%w: %s is in %d films", entity.ErrHasRelations, name, id)
 	}
 	if force {
 		queryDeleteConnection := `DELETE FROM movie_genres WHERE genre_id=?`
