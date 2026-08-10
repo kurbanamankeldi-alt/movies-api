@@ -49,7 +49,7 @@ func (r *SQLiteMovieRepository) FindAll() ([]*entity.Movie, error) {
 
     for rows.Next() {
         m := &entity.Movie{}
-        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
+        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration, &m.Version)
         if err != nil {
             return nil, fmt.Errorf("%w: scan movie row: %w", customerrors.ErrDB, err)
         }
@@ -83,7 +83,7 @@ func (r *SQLiteMovieRepository) FindWithPagination(page, size int) ([]*entity.Mo
 
     for rows.Next() {
         m := &entity.Movie{}
-        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
+        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration, &m.Version)
         if err != nil {
             return nil, fmt.Errorf("%w: scan movie row: %w", customerrors.ErrDB, err)
         }
@@ -107,7 +107,7 @@ func (r *SQLiteMovieRepository) FindById(id int) (*entity.Movie, error) {
     row := r.db.QueryRow(queryMoviesTable, id)
     movie := &entity.Movie{}
 
-    err := row.Scan(&movie.Id,&movie.Title,&movie.ReleaseYear, &movie.Duration)
+    err := row.Scan(&movie.Id,&movie.Title,&movie.ReleaseYear, &movie.Duration, &movie.Version)
     if err != nil {
         if errors.Is(err, sql.ErrNoRows) {
             return nil, fmt.Errorf("%w: not found (movieId=%d): %w", customerrors.ErrNotFound, id, err)
@@ -129,7 +129,8 @@ func (r *SQLiteMovieRepository) FindByGenre(genreId int) ([]*entity.Movie, error
             m.id, 
             m.title, 
             m.release_year,
-            m.duration
+            m.duration,
+            m.version
         FROM movies m
         JOIN movie_genres mg
         ON mg.movie_id = m.id
@@ -147,7 +148,7 @@ func (r *SQLiteMovieRepository) FindByGenre(genreId int) ([]*entity.Movie, error
 
     for rows.Next() {
         m := &entity.Movie{}
-        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
+        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration, &m.Version)
         if err != nil {
             if errors.Is(err, sql.ErrNoRows) {
                 return nil, fmt.Errorf("%w: not found (genreId=%d): %w", customerrors.ErrNotFound, genreId, err)
@@ -183,7 +184,7 @@ func (r *SQLiteMovieRepository) FindByYear(year int) ([]*entity.Movie, error) {
     for rows.Next() {
         m := &entity.Movie{}
 
-        if err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration); err != nil {
+        if err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration, &m.Version); err != nil {
             if errors.Is(err, sql.ErrNoRows) {
                 return nil, fmt.Errorf("%w: not found (year=%d): %w", customerrors.ErrNotFound, year, err)
             }
@@ -210,7 +211,8 @@ func (r *SQLiteMovieRepository) FindByActor(actorId int) ([]*entity.Movie, error
             m.id, 
             m.title, 
             m.release_year,
-            m.duration
+            m.duration,
+            m.version
         FROM movies m
         JOIN movie_actors ma
         ON ma.movie_id = m.id
@@ -228,7 +230,7 @@ func (r *SQLiteMovieRepository) FindByActor(actorId int) ([]*entity.Movie, error
 
     for rows.Next() {
         m := &entity.Movie{}
-        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
+        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration, &m.Version)
         if err != nil {
             if errors.Is(err, sql.ErrNoRows) {
                 return nil, fmt.Errorf("%w: not found (actorId=%d): %w", customerrors.ErrNotFound, actorId, err)
@@ -277,6 +279,12 @@ func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
     result, err := tx.Exec(queryForMovies, movie.Title, movie.ReleaseYear, movie.Duration)
 
     if err != nil {
+        if isUniqueConstraint(err) {
+            return 0, fmt.Errorf("%w: movie '%s' released in %d already exists",customerrors.ErrConflict,
+			    movie.Title,
+			    movie.ReleaseYear,
+		    )
+        }
         return 0, fmt.Errorf("%w: insert movie: %w", customerrors.ErrDB, err)
     }
 
@@ -323,27 +331,38 @@ func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
 }
 
 func (r *SQLiteMovieRepository) Update(id int, patch *entity.MoviePatch) (int64, error) {
+
     tx, err := r.db.Begin()
     if err != nil {
         return 0, fmt.Errorf("%w: transaction movie update start: %w", customerrors.ErrDB, err)
     }
+
     defer tx.Rollback()
 
-    //check if movie exists
-    var exists int
+    // Check that the movie exists and get its current version.
+    var currentVersion int
 
-    err = tx.QueryRow(`SELECT 1 FROM movies WHERE id = ?`, id).Scan(&exists)
+    err = tx.QueryRow(`SELECT version FROM movies WHERE id = ?`, id).Scan(&currentVersion)
 
     if err != nil {
         if errors.Is(err, sql.ErrNoRows) {
             return 0, fmt.Errorf("%w: movie does not exist (movie=%d)", customerrors.ErrNotFound, id)
         }
 
-        return 0, fmt.Errorf("%w: check movie existence (movie=%d): %w", customerrors.ErrDB, id, err)
+        return 0, fmt.Errorf("%w: check movie version (movie=%d): %w", customerrors.ErrDB, id, err)
     }
 
-    //update only provided fields 
+    // Optimistic locking check.
+    if currentVersion != *patch.Version {
+        return 0, fmt.Errorf("%w: movie was modified by another user (movie=%d, expectedVersion=%d, currentVersion=%d)",
+            customerrors.ErrConcurrentModification,
+            id,
+            *patch.Version,
+            currentVersion,
+        )
+    }
 
+    // Build scalar updates.
     updates := []string{}
     args := []any{}
 
@@ -362,19 +381,32 @@ func (r *SQLiteMovieRepository) Update(id int, patch *entity.MoviePatch) (int64,
         args = append(args, *patch.Duration)
     }
 
+    // If anything is being updated, increment version.
     if len(updates) > 0 {
-        args = append(args, id)
+        updates = append(updates, "version = version + 1")
 
-        query := fmt.Sprintf(`UPDATE movies SET %s WHERE id = ?`, strings.Join(updates, ", "))
+        args = append(args, id, *patch.Version)
 
-        if _, err := tx.Exec(query, args...); err != nil {
+        query := fmt.Sprintf(`UPDATE movies SET %s WHERE id = ? AND version = ?`, strings.Join(updates, ", "))
+
+        result, err := tx.Exec(query, args...)
+        if err != nil {
             return 0, fmt.Errorf("%w: update movie (movie=%d): %w", customerrors.ErrDB, id, err)
+        }
+
+        rowsAffected, err := result.RowsAffected()
+        if err != nil {
+            return 0, fmt.Errorf("%w: get affected rows (movie=%d): %w", customerrors.ErrDB, id, err)
+        }
+
+        if rowsAffected == 0 {
+            return 0, fmt.Errorf("%w: movie was modified by another user (movie=%d)", customerrors.ErrConflict, id)
         }
     }
 
-    //if actor ids were supplied
-
+    // Replace actors if supplied.
     if patch.Actors != nil {
+
         if _, err := tx.Exec(`DELETE FROM movie_actors WHERE movie_id = ?`, id); err != nil {
             return 0, fmt.Errorf("%w: delete movie actors (movie=%d): %w", customerrors.ErrDB, id, err)
         }
@@ -383,9 +415,12 @@ func (r *SQLiteMovieRepository) Update(id int, patch *entity.MoviePatch) (int64,
 
         for _, actor := range *patch.Actors {
             if _, err := tx.Exec(query, id, actor.Id); err != nil {
+
                 var sqliteErr sqlite3.Error
 
-                if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
+                if errors.As(err, &sqliteErr) &&
+                    sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
+
                     return 0, fmt.Errorf("%w: non existing actor (actorId=%d)", customerrors.ErrInvalidReference, actor.Id)
                 }
 
@@ -394,9 +429,9 @@ func (r *SQLiteMovieRepository) Update(id int, patch *entity.MoviePatch) (int64,
         }
     }
 
-    //if genre ids were supplied
-
+    // Replace genres if supplied.
     if patch.Genres != nil {
+
         if _, err := tx.Exec(`DELETE FROM movie_genres WHERE movie_id = ?`, id); err != nil {
             return 0, fmt.Errorf("%w: delete movie genres (movie=%d): %w", customerrors.ErrDB, id, err)
         }
@@ -405,14 +440,37 @@ func (r *SQLiteMovieRepository) Update(id int, patch *entity.MoviePatch) (int64,
 
         for _, genre := range *patch.Genres {
             if _, err := tx.Exec(query, id, genre.Id); err != nil {
+
                 var sqliteErr sqlite3.Error
 
-                if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
+                if errors.As(err, &sqliteErr) &&
+                    sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
+
                     return 0, fmt.Errorf("%w: non existing genre (genreId=%d)", customerrors.ErrInvalidReference, genre.Id)
                 }
 
                 return 0, fmt.Errorf("%w: insert movie genre (movie=%d, genre=%d): %w", customerrors.ErrDB, id, genre.Id, err)
             }
+        }
+    }
+
+    // If only actors or genres were updated, we still need
+    // to increment the movie version.
+    if len(updates) == 0 && (patch.Actors != nil || patch.Genres != nil) {
+
+        result, err := tx.Exec(`UPDATE movies SET version = version + 1 WHERE id = ? AND version = ?`, id, *patch.Version)
+
+        if err != nil {
+            return 0, fmt.Errorf("%w: update movie version (movie=%d): %w", customerrors.ErrDB, id, err)
+        }
+
+        rowsAffected, err := result.RowsAffected()
+        if err != nil {
+            return 0, fmt.Errorf("%w: get affected rows (movie=%d): %w", customerrors.ErrDB, id, err)
+        }
+
+        if rowsAffected == 0 {
+            return 0, fmt.Errorf("%w: movie was modified by another user (movie=%d)", customerrors.ErrConflict, id)
         }
     }
 
@@ -423,7 +481,6 @@ func (r *SQLiteMovieRepository) Update(id int, patch *entity.MoviePatch) (int64,
     return 1, nil
 }
 
-//adjust delete
 func (r *SQLiteMovieRepository) Delete(id int, force bool) (int64, error) {
     tx, err := r.db.Begin()
     if err != nil {
@@ -508,7 +565,7 @@ func (r *SQLiteMovieRepository) FindByExactTitle(title string) (*entity.Movie, e
     row := r.db.QueryRow(queryMoviesTable, title)
     movie := &entity.Movie{}
 
-    err := row.Scan(&movie.Id,&movie.Title,&movie.ReleaseYear, &movie.Duration)
+    err := row.Scan(&movie.Id,&movie.Title,&movie.ReleaseYear, &movie.Duration, &movie.Version)
     if err != nil {
         if errors.Is(err, sql.ErrNoRows) {
             return nil, nil
@@ -537,7 +594,7 @@ func (r *SQLiteMovieRepository) FindByTitleContains(title string) ([]*entity.Mov
 
     for rows.Next() {
         m := &entity.Movie{}
-        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration)
+        err := rows.Scan(&m.Id, &m.Title, &m.ReleaseYear, &m.Duration, &m.Version)
         if err != nil {
             return nil, fmt.Errorf("%w: scan movie row: %w", customerrors.ErrDB, err)
         }
@@ -708,6 +765,17 @@ func (r *SQLiteMovieRepository) populateRelations(movies []*entity.Movie) error 
     }    
 
     return nil
+}
+
+func isUniqueConstraint(err error) bool {
+	var sqliteErr sqlite3.Error
+
+	if errors.As(err, &sqliteErr) {
+		return sqliteErr.Code == sqlite3.ErrConstraint &&
+			sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique
+	}
+
+	return false
 }
 
 func containsActor(actors []entity.Actor, actorId int) bool {

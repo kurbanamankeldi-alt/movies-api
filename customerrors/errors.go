@@ -30,11 +30,11 @@ func (fn HttpErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 //Repository Errors
 var (
 	ErrDB = errors.New("database error")
 	ErrNotFound = errors.New("resource not found")
 	ErrConflict = errors.New("conflict")
 	ErrInvalidReference = errors.New("invalid reference")
+	ErrConcurrentModification = errors.New("movie was modified by another request")
 )
