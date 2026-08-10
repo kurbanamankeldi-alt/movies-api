@@ -1,6 +1,8 @@
-# Movies API — Actor & Genre module
+# Movies API
 
-Covers the **Actor** and **Genre** parts of the `movies-api` project (Movie is implemented separately by a teammate).
+A REST API for managing a movie database — genres, movies, and actors, with many-to-many relationships between them.
+
+Built at Hive by Amankeldi Kurban (Movie) and Polina Filippova (Genre, Actor).
 
 ## Setup
 
@@ -11,29 +13,93 @@ go run main.go
 
 The server starts on `http://localhost:8081` and seeds the database with sample data on first run.
 
+## All endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/movie` | Create a movie |
+| `GET` | `/api/movie` | List all movies |
+| `GET` | `/api/movie?genre={genreId}` | Movies filtered by genre |
+| `GET` | `/api/movie?year={releaseYear}` | Movies filtered by release year |
+| `GET` | `/api/movie?actor={actorId}` | Movies the specified actor has starred in |
+| `GET` | `/api/movie?page={page}&size={size}` | Paginated list of movies |
+| `GET` | `/api/movie/search?title={title}` | Search movies by title (case-insensitive, partial match) |
+| `GET` | `/api/movie/{id}` | Get a movie by id |
+| `GET` | `/api/movie/{id}/actors` | Get all actors starring in a movie |
+| `PATCH` | `/api/movie/{id}` | Partially update a movie |
+| `DELETE` | `/api/movie/{id}` | Delete a movie |
+| `POST` | `/api/genres` | Create a genre |
+| `GET` | `/api/genres` | List all genres |
+| `GET` | `/api/genres?movies=true` | List genres including their movies |
+| `GET` | `/api/genres/{id}` | Get a genre by id (includes its movies) |
+| `PATCH` | `/api/genres/{id}` | Partially update a genre |
+| `DELETE` | `/api/genres/{id}` | Delete a genre |
+| `DELETE` | `/api/genres/deleteconnection/{id}` | Unlink specific movies from a genre |
+| `POST` | `/api/actors` | Create an actor |
+| `GET` | `/api/actors` | List all actors |
+| `GET` | `/api/actors?movies=true` | List actors including their filmography |
+| `GET` | `/api/actors?page={page}&size={size}` | Paginated list of actors |
+| `GET` | `/api/actors?name={name}` | Search actors by name (case-insensitive, partial match) |
+| `GET` | `/api/actors/{id}` | Get an actor by id (includes filmography) |
+| `PATCH` | `/api/actors/{id}` | Partially update an actor |
+| `DELETE` | `/api/actors/{id}` | Delete an actor |
+| `DELETE` | `/api/actors/deleteconnection/{id}` | Unlink specific movies from an actor |
+
+Movie query filters (`genre`, `year`, `actor`) and pagination (`page`/`size`) can't currently be combined in one request — use one at a time. When no filters are given, all movies are returned. Same for Actor: `movies`, `page`/`size`, and `name` can't be combined — `name` takes priority if present.
+
+## Genre endpoints
+
+### `POST /api/genres` — create a genre
+
+**Body**
+- Required: `name` (string)
+
+```json
+{
+  "name": "Neo-noir"
+}
+```
+
+### `GET /api/genres` — list genres
+
+**Query params** (optional)
+- `movies=true` — include each genre's associated movies
+
+### `GET /api/genres/{id}` — get one genre
+
+Always includes associated movies.
+
+### `PATCH /api/genres/{id}` — update a genre
+
+**Body** (all optional — omit any field to leave it unchanged)
+- `name`
+- `movieIds` (`[]int`) — sets the genre's movies to exactly this list (adds missing ones, removes any not listed)
+
+```json
+{
+  "name": "Neo-noir Thriller"
+}
+```
+
+### `DELETE /api/genres/{id}` — delete a genre
+
+**Query params**
+- `force=true` (optional) — deletes the genre even if it's linked to movies (removes the links too). Without it, deleting a genre with movies fails with `400`
+
+### `DELETE /api/genres/deleteconnection/{id}` — unlink specific movies
+
+**Body**
+- Required: `movieIds` (`[]int`) — only these links are removed; the genre and any other links stay intact
+
+```json
+{
+  "movieIds": [1, 5]
+}
+```
+
 ## Actor endpoints
 
 ### `POST /api/actors` — create an actor
-
-**Body**
-- Required: `name` (string), `birthdate` (string, `YYYY-MM-DD`)
-- Optional: `movieIds` (`[]int`) — link to existing movies right away
-
-### Implementation notes
-
-* `GET /api/movie` supports filtering by `actor`, `genre`, and `year` query parameters.
-* `GET /api/movie` also supports pagination using `page` and `size`.
-* When no query parameters are provided, all movies are returned.
-* Pagination responses include `Page`, `Size`, and `Movies`.
-* Movie title search is available through `/api/movie/search?title={title}`.
-* `GET /api/movie/{id}/actors` retrieves all actors associated with a specific movie.
-* Movie creation, partial updates, and deletion are implemented.
-* Movie routes follow the `handler → service → repository → SQL → SQLite` architecture.
-* All movie handlers are wrapped with `customerrors.HttpErrorHandler`.
-* The movie repository is initialized with `NewSQLiteMovieRepository(database)`, the service with `NewMovieService(movieRepo)`, and the handler with `NewMovieHandler(movieService)`.
-
-
-## Actor — implemented functionality
 
 **Body**
 - Required: `name` (string), `birthdate` (string, `YYYY-MM-DD`)
@@ -51,7 +117,7 @@ Returns the created actor, including its `id` and `version`.
 
 ### `GET /api/actors` — list actors
 
-**Query params** (all optional, combine freely)
+**Query params** (all optional)
 - `movies=true` — include each actor's filmography
 - `page`, `size` — paginate; **must be provided together**. Response is `{"actors": [...], "page": ..., "size": ..., "total": ...}`
 - `name={text}` — search by name instead of listing everyone (partial, case-insensitive). Always includes filmography
@@ -64,7 +130,8 @@ Always includes filmography.
 
 **Body**
 - **Required: `version` (int)** — the actor's current version (get it from a prior `GET`); the request fails without it
-- Optional: `name`, `birthdate`, `movieIds` — omit any field to leave it unchanged
+- Optional: `name`, `birthdate` — omit to leave unchanged
+- Optional: `movieIds` (`[]int`) — sets the actor's movies to exactly this list (adds missing ones, removes any not listed)
 
 ```json
 {
@@ -91,92 +158,11 @@ If `version` doesn't match the actor's current version in the database (someone 
 }
 ```
 
-## Genre endpoints
-
-Same shape as Actor, minus pagination and version checks.
-
-## Movie — implemented functionality
-
-| Method   | Path                                 | Description                                                   |
-| -------- | ------------------------------------ | ------------------------------------------------------------- |
-| `POST`   | `/api/movie`                         | Create a movie                                                |
-| `GET`    | `/api/movie`                         | List all movies                                               |
-| `GET`    | `/api/movie?genre={genreId}`         | Retrieve movies filtered by genre                             |
-| `GET`    | `/api/movie?year={releaseYear}`      | Retrieve movies filtered by release year                      |
-| `GET`    | `/api/movie?actor={actorId}`         | Retrieve movies that the specified actor has starred in       |
-| `GET`    | `/api/movie?page={page}&size={size}` | Retrieve movies with pagination                               |
-| `GET`    | `/api/movie/search?title={title}`    | Search movies by title using a case-insensitive partial match |
-| `GET`    | `/api/movie/{id}`                    | Retrieve a movie by ID                                        |
-| `GET`    | `/api/movie/{id}/actors`             | Retrieve all actors starring in a movie                       |
-| `PATCH`  | `/api/movie/{id}`                    | Partially update an existing movie                            |
-| `DELETE` | `/api/movie/{id}`                    | Delete a movie                                                |
-
-### Implementation notes
-
-* `GET /api/movie` supports filtering by `actor`, `genre`, and `year` query parameters.
-* `GET /api/movie` also supports pagination using `page` and `size`.
-* When no query parameters are provided, all movies are returned.
-* Pagination responses include `Page`, `Size`, and `Movies`.
-* Movie title search is available through `/api/movie/search?title={title}`.
-* `GET /api/movie/{id}/actors` retrieves all actors associated with a specific movie.
-* Movie creation, partial updates, and deletion are implemented.
-* Movie routes follow the `handler → service → repository → SQL → SQLite` architecture.
-* All movie handlers are wrapped with `customerrors.HttpErrorHandler`.
-* The movie repository is initialized with `NewSQLiteMovieRepository(database)`, the service with `NewMovieService(movieRepo)`, and the handler with `NewMovieHandler(movieService)`.
-
-
-## Actor — implemented functionality
-
-**Body**
-- Required: `name` (string)
-
-```json
-{
-  "name": "Neo-noir"
-}
-```
-
-### `GET /api/genres` — list genres
-
-**Query params** (optional)
-- `movies=true` — include each genre's associated movies
-
-### `GET /api/genres/{id}` — get one genre
-
-Always includes associated movies.
-
-### `PATCH /api/genres/{id}` — update a genre
-
-**Body**
-- Optional: `name`
-
-```json
-{
-  "name": "Neo-noir Thriller"
-}
-```
-
-### `DELETE /api/genres/{id}` — delete a genre
-
-**Query params**
-- `force=true` (optional) — same behavior as Actor: without it, deleting a genre with movies fails with `400`
-
-### `DELETE /api/genres/deleteconnection/{id}` — unlink specific movies
-
-**Body**
-- Required: `movieIds` (`[]int`)
-
-```json
-{
-  "movieIds": [1, 5]
-}
-```
-
 ## What to expect
 
 - `200 OK` — successful read
 - `201 Created` — successful create
-- `204 No Content` — successful update to nothing returned / successful delete
+- `204 No Content` — successful delete
 - `400 Bad Request` — invalid input (missing required field, bad id, bad date, etc.) — the response body explains what's wrong
-- `404 Not Found` — the actor/genre id doesn't exist
-- `409 Conflict` — an actor was updated by someone else since you last fetched it (see `PATCH` above)
+- `404 Not Found` — the id doesn't exist
+- `409 Conflict` — an actor was updated by someone else since you last fetched it (see `PATCH /api/actors/{id}` above)
