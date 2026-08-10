@@ -103,6 +103,7 @@ func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (
 	}
 	defer tx.Rollback()
 	query := `SELECT name, version FROM genres WHERE id =?`
+	queryConnection := `SELECT movie_id FROM movie_genres WHERE genre_id = ?`
 	row := tx.QueryRow(query, id)
 	var name string
 	var version int
@@ -125,7 +126,26 @@ func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (
 		return entity.Genre{}, fmt.Errorf("%w: genre was updated by someone else, refetch and try again", entity.ErrVersionConflict)
 	}
 	if genre.MovieIds != nil {
-		err := CreateGenreConnection(tx, int64(id), genre.MovieIds)
+		rowConnection, err := tx.Query(queryConnection, id)
+		if err != nil {
+			return entity.Genre{}, err
+		}
+		defer rowConnection.Close()
+		var currentMoviesId []int
+		for rowConnection.Next() {
+			var idCurrent int
+			err = rowConnection.Scan(&idCurrent)
+			if err != nil {
+				return entity.Genre{}, err
+			}
+			currentMoviesId = append(currentMoviesId, idCurrent)
+		}
+		toAdd, toDelete := computeMovieDiff(currentMoviesId, genre.MovieIds)
+		err = CreateGenreConnection(tx, int64(id), toAdd)
+		if err != nil {
+			return entity.Genre{}, err
+		}
+		err = DeleteGenreConnection(tx, int64(id), toDelete)
 		if err != nil {
 			return entity.Genre{}, err
 		}
@@ -133,7 +153,7 @@ func (g *SQLiteGenreRepository) Update(id int, genre entity.GenrePatchRequest) (
 	if err := tx.Commit(); err != nil {
 		return entity.Genre{}, err
 	}
-	return entity.Genre{Id: uint(id), Name: name, Version: genre.Version + 1}, nil
+	return entity.Genre{Id: uint(id), Name: name, Version: version + 1}, nil
 }
 func (g *SQLiteGenreRepository) Delete(id int, force bool) (int64, error) {
 	query := `SELECT name, version FROM genres WHERE id = ?`
@@ -194,6 +214,21 @@ func CreateGenreConnection(tx *sql.Tx, idGenre int64, idMovies []int) error {
 		}
 	}
 	return nil
+}
+func DeleteGenreConnection(tx *sql.Tx, idGenre int64, idMovies []int) error {
+	if len(idMovies) == 0 {
+		return nil
+	}
+	str := make([]string, len(idMovies))
+	args := []any{idGenre}
+	for i, movieID := range idMovies {
+		str[i] = "?"
+		args = append(args, movieID)
+	}
+	placeholder := strings.Join(str, ",")
+	query := fmt.Sprintf(`DELETE FROM movie_genres WHERE genre_id=? AND movie_id IN (%s)`, placeholder)
+	_, err := tx.Exec(query, args...)
+	return err
 }
 func (g *SQLiteGenreRepository) GetMovies(id int) ([]entity.Movie, error) {
 	query := `SELECT movies.id, movies.title, movies.release_year, movies.duration

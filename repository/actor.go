@@ -163,6 +163,7 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 	}
 	defer tx.Rollback()
 	query := `SELECT name, birthdate, version FROM actors WHERE id = ?`
+	queryConnection := `SELECT movie_id FROM movie_actors WHERE actor_id = ?`
 	row := tx.QueryRow(query, id)
 	var name, birthdate string
 	var version int
@@ -172,6 +173,7 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 	} else if err != nil {
 		return entity.Actor{}, err
 	}
+
 	if actor.BirthDate != nil {
 		birthdate = *actor.BirthDate
 	}
@@ -193,11 +195,29 @@ func (a *SQLiteActorRepository) Update(id int, actor entity.ActorPatchRequest) (
 		return entity.Actor{}, fmt.Errorf("%w: actor was updated by someone else, refetch and try again", entity.ErrVersionConflict)
 	}
 	if actor.MovieIds != nil {
-		err := CreateActorConnection(tx, int64(id), actor.MovieIds)
+		rowConnection, err := tx.Query(queryConnection, id)
 		if err != nil {
 			return entity.Actor{}, err
 		}
-
+		defer rowConnection.Close()
+		var currentMoviesId []int
+		for rowConnection.Next() {
+			var idCurrent int
+			err = rowConnection.Scan(&idCurrent)
+			if err != nil {
+				return entity.Actor{}, err
+			}
+			currentMoviesId = append(currentMoviesId, idCurrent)
+		}
+		toAdd, toDelete := computeMovieDiff(currentMoviesId, actor.MovieIds)
+		err = CreateActorConnection(tx, int64(id), toAdd)
+		if err != nil {
+			return entity.Actor{}, err
+		}
+		err = DeleteActorConnection(tx, int64(id), toDelete)
+		if err != nil {
+			return entity.Actor{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return entity.Actor{}, err
@@ -281,6 +301,29 @@ func (a *SQLiteActorRepository) CheckDuplicates() ([]entity.Actor, error) {
 }
 
 // helpers
+func computeMovieDiff(current []int, desired []int) ([]int, []int) {
+	currentSet := make(map[int]bool)
+	for _, v := range current {
+		currentSet[v] = true
+	}
+	newSet := make(map[int]bool)
+	for _, v := range desired {
+		newSet[v] = true
+	}
+	toAdd := []int{}
+	toDelete := []int{}
+	for _, v := range desired {
+		if !currentSet[v] {
+			toAdd = append(toAdd, v)
+		}
+	}
+	for _, v := range current {
+		if !newSet[v] {
+			toDelete = append(toDelete, v)
+		}
+	}
+	return toAdd, toDelete
+}
 func nameStyle(name string) string {
 	nameSlice := strings.Split(name, " ")
 	for i := range nameSlice {
@@ -303,6 +346,21 @@ func CreateActorConnection(tx *sql.Tx, idActor int64, idMovies []int) error {
 		}
 	}
 	return nil
+}
+func DeleteActorConnection(tx *sql.Tx, idActor int64, idMovies []int) error {
+	if len(idMovies) == 0 {
+		return nil
+	}
+	str := make([]string, len(idMovies))
+	args := []any{idActor}
+	for i, movieID := range idMovies {
+		str[i] = "?"
+		args = append(args, movieID)
+	}
+	placeholder := strings.Join(str, ",")
+	query := fmt.Sprintf(`DELETE FROM movie_actors WHERE actor_id=? AND movie_id IN (%s)`, placeholder)
+	_, err := tx.Exec(query, args...)
+	return err
 }
 func (a *SQLiteActorRepository) GetMovies(id int) ([]entity.Movie, error) {
 	query := `SELECT movies.id, movies.title, movies.release_year, movies.duration
