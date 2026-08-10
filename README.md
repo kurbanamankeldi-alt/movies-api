@@ -47,6 +47,10 @@ The server starts on `http://localhost:8081` and seeds the database with sample 
 
 Movie query filters (`genre`, `year`, `actor`) and pagination (`page`/`size`) can't currently be combined in one request — use one at a time. When no filters are given, all movies are returned. Same for Actor: `movies`, `page`/`size`, and `name` can't be combined — `name` takes priority if present.
 
+## Postman links:
+- Movies: https://documenter.getpostman.com/view/56847520/2sBY4WnGRn#intro
+- Actors and genres: https://documenter.getpostman.com/view/56933209/2sBY4WnGWB
+
 ## Genre endpoints
 
 ### `POST /api/genres` — create a genre
