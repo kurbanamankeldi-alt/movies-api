@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 )
@@ -38,7 +39,7 @@ func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
 	actor.Name = nameStyle(actor.Name)
 	result, err := tx.Exec(query, actor.Name, actor.BirthDate.Format("2006-01-02"), 1)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: actor name or actor birthday already exists", entity.ErrAlreadyExists)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
@@ -284,8 +285,14 @@ func nameStyle(name string) string {
 	nameSlice := strings.Split(name, " ")
 	for i := range nameSlice {
 		nameSlice[i] = strings.ToLower(nameSlice[i])
+		nameSlice[i] = firstUpperCase(nameSlice[i])
 	}
 	return strings.Join(nameSlice, " ")
+}
+func firstUpperCase(name string) string {
+	s := []rune(name)
+	s[0] = unicode.ToUpper(s[0])
+	return string(s)
 }
 func CreateActorConnection(tx *sql.Tx, idActor int64, idMovies []int) error {
 	for _, id := range idMovies {

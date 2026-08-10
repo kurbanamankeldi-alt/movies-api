@@ -40,6 +40,9 @@ func (h *ActorHandler) Create(w http.ResponseWriter, r *http.Request) *customerr
 		if errors.Is(err, entity.ErrInvalidContent) {
 			return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusBadRequest}
 		}
+		if errors.Is(err, entity.ErrAlreadyExists) {
+			return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusConflict}
+		}
 		return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
 	}
 

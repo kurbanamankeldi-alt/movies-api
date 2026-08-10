@@ -32,9 +32,10 @@ func (g *SQLiteGenreRepository) Create(genre *entity.Genre) (int64, error) {
 	}
 	defer tx.Rollback()
 	query := `INSERT INTO genres (name, version) VALUES (?, ?);`
+	genre.Name = nameStyle(genre.Name)
 	result, err := tx.Exec(query, genre.Name, 1)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: genre already exists", entity.ErrAlreadyExists)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
@@ -183,7 +184,8 @@ func (g *SQLiteGenreRepository) DeleteConnection(id int, movies []int) (int64, e
 	return result.RowsAffected()
 }
 
-// helper
+// helpers
+
 func CreateGenreConnection(tx *sql.Tx, idGenre int64, idMovies []int) error {
 	for _, id := range idMovies {
 		_, err := tx.Exec(`INSERT OR IGNORE INTO movie_genres(movie_id, genre_id) VALUES (?,?)`, id, idGenre)
