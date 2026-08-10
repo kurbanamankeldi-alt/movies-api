@@ -19,6 +19,26 @@ The server starts on `http://localhost:8081` and seeds the database with sample 
 - Required: `name` (string), `birthdate` (string, `YYYY-MM-DD`)
 - Optional: `movieIds` (`[]int`) — link to existing movies right away
 
+### Implementation notes
+
+* `GET /api/movie` supports filtering by `actor`, `genre`, and `year` query parameters.
+* `GET /api/movie` also supports pagination using `page` and `size`.
+* When no query parameters are provided, all movies are returned.
+* Pagination responses include `Page`, `Size`, and `Movies`.
+* Movie title search is available through `/api/movie/search?title={title}`.
+* `GET /api/movie/{id}/actors` retrieves all actors associated with a specific movie.
+* Movie creation, partial updates, and deletion are implemented.
+* Movie routes follow the `handler → service → repository → SQL → SQLite` architecture.
+* All movie handlers are wrapped with `customerrors.HttpErrorHandler`.
+* The movie repository is initialized with `NewSQLiteMovieRepository(database)`, the service with `NewMovieService(movieRepo)`, and the handler with `NewMovieHandler(movieService)`.
+
+
+## Actor — implemented functionality
+
+**Body**
+- Required: `name` (string), `birthdate` (string, `YYYY-MM-DD`)
+- Optional: `movieIds` (`[]int`) — link to existing movies right away
+
 ```json
 {
   "name": "Tom Hardy",
