@@ -41,3 +41,12 @@ func(m Movie) ValidateMovie() error {
 
 	return nil
 } 
+
+type MoviePatch struct {
+    Title *string 
+    ReleaseYear *int    
+    Duration *int   
+
+    Actors *[]Actor 
+    Genres *[]Genre
+}
