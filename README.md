@@ -95,7 +95,37 @@ If `version` doesn't match the actor's current version in the database (someone 
 
 Same shape as Actor, minus pagination and version checks.
 
-### `POST /api/genres` — create a genre
+## Movie — implemented functionality
+
+| Method   | Path                                 | Description                                                   |
+| -------- | ------------------------------------ | ------------------------------------------------------------- |
+| `POST`   | `/api/movie`                         | Create a movie                                                |
+| `GET`    | `/api/movie`                         | List all movies                                               |
+| `GET`    | `/api/movie?genre={genreId}`         | Retrieve movies filtered by genre                             |
+| `GET`    | `/api/movie?year={releaseYear}`      | Retrieve movies filtered by release year                      |
+| `GET`    | `/api/movie?actor={actorId}`         | Retrieve movies that the specified actor has starred in       |
+| `GET`    | `/api/movie?page={page}&size={size}` | Retrieve movies with pagination                               |
+| `GET`    | `/api/movie/search?title={title}`    | Search movies by title using a case-insensitive partial match |
+| `GET`    | `/api/movie/{id}`                    | Retrieve a movie by ID                                        |
+| `GET`    | `/api/movie/{id}/actors`             | Retrieve all actors starring in a movie                       |
+| `PATCH`  | `/api/movie/{id}`                    | Partially update an existing movie                            |
+| `DELETE` | `/api/movie/{id}`                    | Delete a movie                                                |
+
+### Implementation notes
+
+* `GET /api/movie` supports filtering by `actor`, `genre`, and `year` query parameters.
+* `GET /api/movie` also supports pagination using `page` and `size`.
+* When no query parameters are provided, all movies are returned.
+* Pagination responses include `Page`, `Size`, and `Movies`.
+* Movie title search is available through `/api/movie/search?title={title}`.
+* `GET /api/movie/{id}/actors` retrieves all actors associated with a specific movie.
+* Movie creation, partial updates, and deletion are implemented.
+* Movie routes follow the `handler → service → repository → SQL → SQLite` architecture.
+* All movie handlers are wrapped with `customerrors.HttpErrorHandler`.
+* The movie repository is initialized with `NewSQLiteMovieRepository(database)`, the service with `NewMovieService(movieRepo)`, and the handler with `NewMovieHandler(movieService)`.
+
+
+## Actor — implemented functionality
 
 **Body**
 - Required: `name` (string)
