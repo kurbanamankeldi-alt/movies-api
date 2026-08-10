@@ -14,6 +14,7 @@ func CreateTables(db *sql.DB) (sql.Result, error) {
 		title TEXT NOT NULL,
 		release_year INTEGER NOT NULL,
 		duration INTEGER NOT NULL,
+		version INTEGER NOT NULL DEFAULT 1,
 		UNIQUE(title, release_year)
 	);
 

@@ -199,6 +199,14 @@ func (h *MovieHandler) Create(w http.ResponseWriter, r *http.Request) *customerr
 		return &customerrors.HttpError{Message: "invlaid genre id provided", Code: http.StatusBadRequest}
 	}
 
+	if hasDuplicateIDs(actorIds) {
+		return &customerrors.HttpError{Message: "duplicate actor id provided", Code: http.StatusBadRequest}
+	}
+
+	if hasDuplicateIDs(genreIds) {
+		return &customerrors.HttpError{Message: "duplicate genre id provided", Code: http.StatusBadRequest}
+	}	
+
 	var movie entity.Movie
 
 	decoder := json.NewDecoder(r.Body)
@@ -227,13 +235,13 @@ func (h *MovieHandler) Create(w http.ResponseWriter, r *http.Request) *customerr
 	}
 
 	movie.Id = uint(createdId)
+	movie.Version = 1
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(movie)
 
 	return nil
 }
-
 
 func (h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
 	if r.Method != http.MethodPatch {
@@ -255,8 +263,16 @@ func (h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *customerr
 		return &customerrors.HttpError{Message: "invalid request body", Code: http.StatusBadRequest}
 	}
 
-   // Validate only supplied scalar fields.
+    // Version is required for optimistic locking.
+    if patch.Version == nil {
+        return &customerrors.HttpError{Message: "movie version is required", Code: http.StatusBadRequest}
+    }
 
+    if *patch.Version <= 0 {
+        return &customerrors.HttpError{Message: "movie version must be greater than zero", Code:http.StatusBadRequest}
+    }   
+
+	// Validate only supplied scalar fields.
     if patch.Title != nil {
         if strings.TrimSpace(*patch.Title) == "" {
             return &customerrors.HttpError{Message: "movie title cannot be empty", Code: http.StatusBadRequest}
@@ -453,6 +469,11 @@ func errorResponse(err error) *customerrors.HttpError {
 			Message: "not found",
 			Code:    http.StatusNotFound,
 		}	
+	case errors.Is(err, customerrors.ErrConcurrentModification):
+		return &customerrors.HttpError{
+			Message: "movie was modified by another user",
+			Code:    http.StatusConflict,
+		}		
 	case errors.Is(err, customerrors.ErrConflict):
 		return &customerrors.HttpError{
 			Message: err.Error(),
@@ -464,10 +485,24 @@ func errorResponse(err error) *customerrors.HttpError {
 			Code:    http.StatusBadRequest,
 		}		
 	default:
-		log.Println("Uknown error", err)
+		log.Println("Unknown error", err)
 		return &customerrors.HttpError{
 			Message: "internal server error",
 			Code:    http.StatusInternalServerError,
 		}		
 	}
+}
+
+func hasDuplicateIDs(ids []int) bool {
+	seen := make(map[int]struct{})
+
+	for _, id := range ids {
+		if _, exists := seen[id]; exists {
+			return true
+		}
+
+		seen[id] = struct{}{}
+	}
+
+	return false
 }
