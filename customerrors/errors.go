@@ -3,6 +3,7 @@ package customerrors
 import (
 	"log"
 	"net/http"
+	"errors"
 )
 
 type HttpError struct {
@@ -28,3 +29,12 @@ func (fn HttpErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, e.Message, e.Code)
 	}
 }
+
+//Repository Errors
+var (
+	ErrDB = errors.New("database error")
+	ErrNotFound = errors.New("resource not found")
+	ErrConflict = errors.New("conflict")
+	ErrInvalidReference = errors.New("invalid reference")
+	ErrConcurrentModification = errors.New("movie was modified by another request")
+)

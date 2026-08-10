@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"errors"
 	"time"
+	"strings"
 )
 
 type Movie struct {
@@ -11,13 +12,14 @@ type Movie struct {
 	Title string
 	ReleaseYear int
 	Duration int
+	Version int
 
 	Actors []Actor
 	Genres []Genre
 }
 
 func(m Movie) ValidateMovie() error {
-	if m.Title == "" {
+	if strings.TrimSpace(m.Title) == "" {
 		return errors.New("movie title cannot be empty")
 	}
 
@@ -41,3 +43,13 @@ func(m Movie) ValidateMovie() error {
 
 	return nil
 } 
+
+type MoviePatch struct {
+    Title *string 
+    ReleaseYear *int    
+    Duration *int   
+
+    Actors *[]Actor 
+    Genres *[]Genre
+ 	Version     *int `json:"version"`
+}

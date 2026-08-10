@@ -26,13 +26,24 @@ func (s *MovieService) GetMovieById(id int) (*entity.Movie, error) {
 	return movie, nil
 }
 
+
 func (s *MovieService) GetAllMovies() ([]*entity.Movie, error) {
 	movies, err := s.repo.FindAll()
 
 	if err != nil {
 		return nil, err
 	}
+	
+	return movies, nil
+}
 
+func (s *MovieService) GetMoviesWithPagination(page, size int) ([]*entity.Movie, error) {
+	movies, err := s.repo.FindWithPagination(page, size)
+
+	if err != nil {
+		return nil, err
+	}
+	
 	return movies, nil
 }
 
@@ -77,11 +88,6 @@ func (s *MovieService) FindMovieActors(id int) ([]entity.Actor, error) {
 }
 
 func (s *MovieService) CreateMovie(movie *entity.Movie) (int64, error) {
-
-	if err := movie.ValidateMovie(); err != nil {
-		return 0, err
-	}
-
 	//make first letter upper and rest lower
 	movie.Title = strings.Title(strings.ToLower(movie.Title))
 
@@ -94,37 +100,27 @@ func (s *MovieService) CreateMovie(movie *entity.Movie) (int64, error) {
 	return createdId, nil
 }
 
-func (s *MovieService) FilterMoviesBy(movieId, actorId, genreId, year int)  ([]*entity.Movie, error) {
-	movies, err := s.repo.FilterBy(movieId, actorId, genreId, year)
+func (s *MovieService) UpdateMovie(id int, patch *entity.MoviePatch) (int64, error) {
+    return s.repo.Update(id, patch)
+}
 
+func (s *MovieService) DeleteMovie(id int, force bool) (int64, error) {
+    return s.repo.Delete(id, force)
+}
+
+//extra
+func (s *MovieService) SearchMovies(title string) ([]*entity.Movie, error) {
+	title = strings.ToLower(strings.TrimSpace(title))
+	exactMatch := strings.Title(title)
+
+	movie, err := s.repo.FindByExactTitle(exactMatch)
 	if err != nil {
 		return nil, err
 	}
 
-	return movies, nil	
-}
-
-func (s *MovieService) UpdateMovie(id int, newData *entity.Movie) (int64, error) {
-
-	if err := newData.ValidateMovie(); err != nil {
-		return 0, err
+	if movie != nil {
+		return []*entity.Movie{movie}, nil
 	}
 
-	updatedRow, err := s.repo.Update(id, newData)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return updatedRow, nil
-}
-
-func (s *MovieService) DeleteMovie(id int) (int64, error) {
-	updatedRow, err := s.repo.Delete(id)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return updatedRow, nil
+	return s.repo.FindByTitleContains(title)	
 }
