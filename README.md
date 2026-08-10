@@ -17,17 +17,17 @@ The server starts on `http://localhost:8081` and seeds the database with sample 
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/movie` | Create a movie |
-| `GET` | `/api/movie` | List all movies |
-| `GET` | `/api/movie?genre={genreId}` | Movies filtered by genre |
-| `GET` | `/api/movie?year={releaseYear}` | Movies filtered by release year |
-| `GET` | `/api/movie?actor={actorId}` | Movies the specified actor has starred in |
-| `GET` | `/api/movie?page={page}&size={size}` | Paginated list of movies |
-| `GET` | `/api/movie/search?title={title}` | Search movies by title (case-insensitive, partial match) |
-| `GET` | `/api/movie/{id}` | Get a movie by id |
-| `GET` | `/api/movie/{id}/actors` | Get all actors starring in a movie |
-| `PATCH` | `/api/movie/{id}` | Partially update a movie |
-| `DELETE` | `/api/movie/{id}` | Delete a movie |
+| `POST` | `/api/movies` | Create a movie |
+| `GET` | `/api/movies` | List all movies |
+| `GET` | `/api/movies?genre={genreId}` | Movies filtered by genre |
+| `GET` | `/api/movies?year={releaseYear}` | Movies filtered by release year |
+| `GET` | `/api/movies?actor={actorId}` | Movies the specified actor has starred in |
+| `GET` | `/api/movies?page={page}&size={size}` | Paginated list of movies |
+| `GET` | `/api/movies/search?title={title}` | Search movies by title (case-insensitive, partial match) |
+| `GET` | `/api/movies/{id}` | Get a movie by id |
+| `GET` | `/api/movies/{id}/actors` | Get all actors starring in a movie |
+| `PATCH` | `/api/movies/{id}` | Partially update a movie |
+| `DELETE` | `/api/movies/{id}` | Delete a movie |
 | `POST` | `/api/genres` | Create a genre |
 | `GET` | `/api/genres` | List all genres |
 | `GET` | `/api/genres?movies=true` | List genres including their movies |

@@ -24,11 +24,13 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 	genreService := service.NewGenreService(genreRepo)
 	genreHandler := handler.NewGenreHandler(genreService)
 
-	mux.Handle("GET /api/movie", customerrors.HttpErrorHandler(movieHandler.Get))
-	mux.Handle("GET /api/movie/search", customerrors.HttpErrorHandler(movieHandler.Search))
-	mux.Handle("GET /api/movie/{id}", customerrors.HttpErrorHandler(movieHandler.GetById))
-	mux.Handle("GET /api/movie/{id}/actors", customerrors.HttpErrorHandler(movieHandler.GetActorsById))
-	mux.Handle("POST /api/movie", customerrors.HttpErrorHandler(movieHandler.Create))
+	mux.Handle("GET /api/movies", customerrors.HttpErrorHandler(movieHandler.Get))
+	mux.Handle("GET /api/movies/search", customerrors.HttpErrorHandler(movieHandler.Search))
+	mux.Handle("GET /api/movies/{id}", customerrors.HttpErrorHandler(movieHandler.GetById))
+	mux.Handle("GET /api/movies/{id}/actors", customerrors.HttpErrorHandler(movieHandler.GetActorsById))
+	mux.Handle("POST /api/movies", customerrors.HttpErrorHandler(movieHandler.Create))
+	mux.Handle("PATCH /api/movies/{id}", customerrors.HttpErrorHandler(movieHandler.Update))
+	mux.Handle("DELETE /api/movies/{id}", customerrors.HttpErrorHandler(movieHandler.Delete))	
 
 	mux.Handle("GET /api/actors", customerrors.HttpErrorHandler(actorHandler.GetAll))
 	mux.Handle("POST /api/actors", customerrors.HttpErrorHandler(actorHandler.Create))
@@ -44,13 +46,4 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 	mux.Handle("PATCH /api/genres/{id}", customerrors.HttpErrorHandler(genreHandler.Update))
 	mux.Handle("DELETE /api/genres/{id}", customerrors.HttpErrorHandler(genreHandler.Delete))
 	mux.Handle("DELETE /api/genres/deleteconnection/{id}", customerrors.HttpErrorHandler(genreHandler.DeleteConnection))
-	mux.Handle("PATCH /api/movie/{id}", customerrors.HttpErrorHandler(movieHandler.Update))
-	mux.Handle("DELETE /api/movie/{id}", customerrors.HttpErrorHandler(movieHandler.Delete))
 }
-
-/*
-POST /api/movies/{id}/actors/{id}
-DELETE /api/movies/{id}/actors/{id}
-POST /api/movies/{id}/genres/{id}
-DELETE /api/movies/{id}/genres/{id}
-*/
