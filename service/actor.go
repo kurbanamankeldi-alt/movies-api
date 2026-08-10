@@ -84,3 +84,10 @@ func (s *ActorService) DeleteConnection(id int, moviesId []int) error {
 	}
 	return nil
 }
+func (s *ActorService) CheckDuplicates() ([]entity.Actor, error) {
+	actors, err := s.repo.CheckDuplicates()
+	if err != nil {
+		return []entity.Actor{}, err
+	}
+	return actors, nil
+}

@@ -36,6 +36,7 @@ func RegisterRoutes(mux *http.ServeMux, database *sql.DB) {
 	mux.Handle("PATCH /api/actors/{id}", customerrors.HttpErrorHandler(actorHandler.Update))
 	mux.Handle("DELETE /api/actors/{id}", customerrors.HttpErrorHandler(actorHandler.Delete))
 	mux.Handle("DELETE /api/actors/deleteconnection/{id}", customerrors.HttpErrorHandler(actorHandler.DeleteConnection))
+	mux.Handle("DELETE /api/actors/checkduplicate", customerrors.HttpErrorHandler(actorHandler.CheckDuplicates))
 
 	mux.Handle("GET /api/genres", customerrors.HttpErrorHandler(genreHandler.GetAll))
 	mux.Handle("POST /api/genres", customerrors.HttpErrorHandler(genreHandler.Create))

@@ -176,3 +176,12 @@ func (h *ActorHandler) DeleteConnection(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
+func (h *ActorHandler) CheckDuplicates(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
+	actorsDuplicate, err := h.service.CheckDuplicates()
+	if err != nil {
+		return &customerrors.HttpError{Err: err, Message: err.Error(), Code: http.StatusInternalServerError}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(actorsDuplicate)
+	return nil
+}

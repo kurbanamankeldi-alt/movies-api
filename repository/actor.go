@@ -25,6 +25,7 @@ type ActorRepository interface {
 	Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error)
 	Delete(id int, force bool) (int64, error)
 	DeleteConnection(id int, movies []int) (int64, error)
+	CheckDuplicates() ([]entity.Actor, error)
 }
 
 func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
@@ -34,7 +35,7 @@ func (a *SQLiteActorRepository) Create(actor *entity.Actor) (int64, error) {
 	}
 	defer tx.Rollback()
 	query := `INSERT INTO actors (name, birthdate, version) VALUES (?, ?, ?);`
-
+	actor.Name = nameStyle(actor.Name)
 	result, err := tx.Exec(query, actor.Name, actor.BirthDate.Format("2006-01-02"), 1)
 	if err != nil {
 		return 0, err
@@ -250,8 +251,42 @@ func (a *SQLiteActorRepository) DeleteConnection(id int, movies []int) (int64, e
 	}
 	return result.RowsAffected()
 }
+func (a *SQLiteActorRepository) CheckDuplicates() ([]entity.Actor, error) {
+	query := `SELECT id, name, version FROM actors`
+	rows, err := a.db.Query(query)
+	if err != nil {
+		return []entity.Actor{}, err
+	}
+	defer rows.Close()
+	actors := []entity.Actor{}
+	for rows.Next() {
+		var id uint
+		var name, birthdate string
+		var version int
+		if err := rows.Scan(&id, &name, &birthdate, &version); err != nil {
+			return []entity.Actor{}, err
+		}
+		birthTime, err := time.Parse("2006-01-02", birthdate)
+		if err != nil {
+			return []entity.Actor{}, err
+		}
+		actors = append(actors, entity.Actor{Id: id, Name: name, BirthDate: birthTime, Version: version})
+	}
+	actorsDuplicated, err := checkDuplicates(actors)
+	if err != nil {
+		return []entity.Actor{}, err
+	}
+	return actorsDuplicated, nil
+}
 
-// helper
+// helpers
+func nameStyle(name string) string {
+	nameSlice := strings.Split(name, " ")
+	for i := range nameSlice {
+		nameSlice[i] = strings.ToLower(nameSlice[i])
+	}
+	return strings.Join(nameSlice, " ")
+}
 func CreateActorConnection(tx *sql.Tx, idActor int64, idMovies []int) error {
 	for _, id := range idMovies {
 		_, err := tx.Exec(`INSERT OR IGNORE INTO movie_actors(movie_id, actor_id) VALUES (?,?)`,
@@ -285,4 +320,16 @@ func (a *SQLiteActorRepository) GetMovies(id int) ([]entity.Movie, error) {
 		movies = append(movies, entity.Movie{Id: id, Title: title, ReleaseYear: year, Duration: duration})
 	}
 	return movies, nil
+}
+func checkDuplicates(actors []entity.Actor) ([]entity.Actor, error) {
+	result := []entity.Actor{}
+	for i := range actors {
+		actors[i].Name = strings.ToLower(actors[i].Name)
+	}
+	for i := 0; i < len(actors)-1; i++ {
+		for j := i + 1; j < len(actors); j++ {
+
+		}
+	}
+	return result, nil
 }
