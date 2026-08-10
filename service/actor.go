@@ -1,6 +1,8 @@
 package service
 
 import (
+	"time"
+
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 	"github.com/kurbanamankeldi-alt/movies-api/repository"
 )
@@ -24,10 +26,10 @@ func (s *ActorService) CreateActor(actor *entity.Actor) (int64, error) {
 	}
 	return id, nil
 }
-func (s *ActorService) GetAll(movies bool) ([]entity.Actor, error) {
-	actors, err := s.repo.GetAll(movies)
+func (s *ActorService) GetAll(movies bool, page int, size int, pagination bool) (entity.PaginatedActorResponse, error) {
+	actors, err := s.repo.GetAll(movies, page, size, pagination)
 	if err != nil {
-		return []entity.Actor{}, err
+		return entity.PaginatedActorResponse{}, err
 	}
 	return actors, nil
 }
@@ -46,6 +48,22 @@ func (s *ActorService) GetByName(name string) ([]entity.Actor, error) {
 	return actors, nil
 }
 func (s *ActorService) Update(id int, actor entity.ActorPatchRequest) (entity.Actor, error) {
+	if err := actor.Validate(); err != nil {
+		return entity.Actor{}, err
+	}
+	if actor.BirthDate != nil {
+		date, err := time.Parse("2006-01-02", *actor.BirthDate)
+		if err != nil {
+			return entity.Actor{}, err
+		}
+		name := ""
+		if actor.Name != nil {
+			name = *actor.Name
+		}
+		if err = entity.ValidateDate(date, name); err != nil {
+			return entity.Actor{}, err
+		}
+	}
 	actorUpdated, err := s.repo.Update(id, actor)
 	if err != nil {
 		return entity.Actor{}, err
@@ -65,4 +83,11 @@ func (s *ActorService) DeleteConnection(id int, moviesId []int) error {
 		return err
 	}
 	return nil
+}
+func (s *ActorService) CheckDuplicates() ([]entity.Actor, error) {
+	actors, err := s.repo.CheckDuplicates()
+	if err != nil {
+		return []entity.Actor{}, err
+	}
+	return actors, nil
 }

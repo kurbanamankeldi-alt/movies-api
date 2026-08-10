@@ -1,31 +1,33 @@
 package db
 
 import (
-    "database/sql"
-    _ "github.com/mattn/go-sqlite3"
+	"database/sql"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
-
 type ActorSeed struct {
-	Name string
+	Name      string
 	BirthDate string
+	Version   int
 }
 
 type GenreSeed struct {
-	Name string
+	Name    string
+	Version int
 }
 
 type MovieSeed struct {
-	Title string
+	Title       string
 	ReleaseYear int
-	Duration float64
+	Duration    float64
 
 	Actors []string
 	Genres []string
 }
 
 func SeedTables(db *sql.DB) error {
-	
+
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -35,11 +37,11 @@ func SeedTables(db *sql.DB) error {
 	//genres
 
 	genres := []GenreSeed{
-		{"Action"},
-		{"Adventure"},
-		{"Comedy"},
-		{"Drama"},
-		{"Science Fiction"},
+		{"Action", 1},
+		{"Adventure", 1},
+		{"Comedy", 1},
+		{"Drama", 1},
+		{"Science Fiction", 1},
 	}
 
 	for _, genre := range genres {
@@ -56,26 +58,26 @@ func SeedTables(db *sql.DB) error {
 	//actors
 
 	actors := []ActorSeed{
-		{"Leonardo DiCaprio", "1974-11-11"},
-		{"Tom Hanks", "1956-07-09"},
-		{"Scarlett Johansson", "1984-11-22"},
-		{"Morgan Freeman", "1937-06-01"},
-		{"Natalie Portman", "1981-06-09"},
-		{"Christian Bale", "1974-01-30"},
-		{"Emma Stone", "1988-11-06"},
-		{"Robert Downey Jr.", "1965-04-04"},
-		{"Chris Evans", "1981-06-13"},
-		{"Jennifer Lawrence", "1990-08-15"},
-		{"Brad Pitt", "1963-12-18"},
-		{"Angelina Jolie", "1975-06-04"},
-		{"Denzel Washington", "1954-12-28"},
-		{"Anne Hathaway", "1982-11-12"},
-		{"Ryan Gosling", "1980-11-12"},
-		{"Matthew McConaughey", "1969-11-04"},
-		{"Russell Crowe", "1964-04-07"},
-		{"Matt Damon", "1970-10-08"},
-		{"Keanu Reeves", "1964-09-02"},		
-		{"Robert Pattinson", "1986-05-13"},
+		{"Leonardo DiCaprio", "1974-11-11", 1},
+		{"Tom Hanks", "1956-07-09", 1},
+		{"Scarlett Johansson", "1984-11-22", 1},
+		{"Morgan Freeman", "1937-06-01", 1},
+		{"Natalie Portman", "1981-06-09", 1},
+		{"Christian Bale", "1974-01-30", 1},
+		{"Emma Stone", "1988-11-06", 1},
+		{"Robert Downey Jr.", "1965-04-04", 1},
+		{"Chris Evans", "1981-06-13", 1},
+		{"Jennifer Lawrence", "1990-08-15", 1},
+		{"Brad Pitt", "1963-12-18", 1},
+		{"Angelina Jolie", "1975-06-04", 1},
+		{"Denzel Washington", "1954-12-28", 1},
+		{"Anne Hathaway", "1982-11-12", 1},
+		{"Ryan Gosling", "1980-11-12", 1},
+		{"Matthew McConaughey", "1969-11-04", 1},
+		{"Russell Crowe", "1964-04-07", 1},
+		{"Matt Damon", "1970-10-08", 1},
+		{"Keanu Reeves", "1964-09-02", 1},
+		{"Robert Pattinson", "1986-05-13", 1},
 	}
 
 	for _, actor := range actors {
@@ -231,7 +233,7 @@ func SeedTables(db *sql.DB) error {
 			150,
 			[]string{"Robert Pattinson"},
 			[]string{"Science Fiction", "Action"},
-		},		
+		},
 	}
 
 	for _, movie := range movies {
@@ -306,6 +308,6 @@ func SeedTables(db *sql.DB) error {
 		}
 	}
 
-	return tx.Commit()	
+	return tx.Commit()
 
 }

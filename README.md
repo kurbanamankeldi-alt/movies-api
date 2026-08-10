@@ -1,24 +1,99 @@
-# Movies API — Actor & Genre module (WIP)
+# Movies API — Actor & Genre module
 
-This covers the **Actor** and **Genre** entities of the `movies-api` project. 
+Covers the **Actor** and **Genre** parts of the `movies-api` project (Movie is implemented separately by a teammate).
 
-## Stack
-
-- Go, `net/http` (built-in router, method-based patterns: `GET /path`, `POST /path`, etc.)
-- SQLite via `database/sql` + `github.com/mattn/go-sqlite3`
-- Raw SQL, no ORM
-
-## Architecture
+## Setup
 
 ```
-handler → service → repository → SQL → SQLite
+go mod tidy
+go run main.go
 ```
 
-- **handler** — parses the HTTP request (path/query params, body), calls the service, writes the HTTP response
-- **service** — thin layer, passes calls through to the repository
-- **repository** — all the SQL lives here: `SQLiteActorRepository` and `SQLiteGenreRepository`, each with its own constructor (`NewSQLiteActorRepository(db)`, etc.) and interface (`ActorRepository`, `GenreRepository`)
+The server starts on `http://localhost:8081` and seeds the database with sample data on first run.
 
-Repo → service → handler wiring happens in `routes.go`, inside `RegisterRoutes(mux, database)` — `main.go` only initializes the database and starts the server.
+## Actor endpoints
+
+### `POST /api/actors` — create an actor
+
+**Body**
+- Required: `name` (string), `birthdate` (string, `YYYY-MM-DD`)
+- Optional: `movieIds` (`[]int`) — link to existing movies right away
+
+### Implementation notes
+
+* `GET /api/movie` supports filtering by `actor`, `genre`, and `year` query parameters.
+* `GET /api/movie` also supports pagination using `page` and `size`.
+* When no query parameters are provided, all movies are returned.
+* Pagination responses include `Page`, `Size`, and `Movies`.
+* Movie title search is available through `/api/movie/search?title={title}`.
+* `GET /api/movie/{id}/actors` retrieves all actors associated with a specific movie.
+* Movie creation, partial updates, and deletion are implemented.
+* Movie routes follow the `handler → service → repository → SQL → SQLite` architecture.
+* All movie handlers are wrapped with `customerrors.HttpErrorHandler`.
+* The movie repository is initialized with `NewSQLiteMovieRepository(database)`, the service with `NewMovieService(movieRepo)`, and the handler with `NewMovieHandler(movieService)`.
+
+
+## Actor — implemented functionality
+
+**Body**
+- Required: `name` (string), `birthdate` (string, `YYYY-MM-DD`)
+- Optional: `movieIds` (`[]int`) — link to existing movies right away
+
+```json
+{
+  "name": "Tom Hardy",
+  "birthdate": "1977-09-15",
+  "movieIds": [1, 5]
+}
+```
+
+Returns the created actor, including its `id` and `version`.
+
+### `GET /api/actors` — list actors
+
+**Query params** (all optional, combine freely)
+- `movies=true` — include each actor's filmography
+- `page`, `size` — paginate; **must be provided together**. Response is `{"actors": [...], "page": ..., "size": ..., "total": ...}`
+- `name={text}` — search by name instead of listing everyone (partial, case-insensitive). Always includes filmography
+
+### `GET /api/actors/{id}` — get one actor
+
+Always includes filmography.
+
+### `PATCH /api/actors/{id}` — update an actor
+
+**Body**
+- **Required: `version` (int)** — the actor's current version (get it from a prior `GET`); the request fails without it
+- Optional: `name`, `birthdate`, `movieIds` — omit any field to leave it unchanged
+
+```json
+{
+  "version": 1,
+  "name": "Tom Hardy Jr."
+}
+```
+
+If `version` doesn't match the actor's current version in the database (someone else updated it in the meantime), the request fails with `409 Conflict`. Re-fetch the actor and try again with the new version.
+
+### `DELETE /api/actors/{id}` — delete an actor
+
+**Query params**
+- `force=true` (optional) — deletes the actor even if they're linked to movies (removes the links too). Without it, deleting an actor who has movies fails with `400`
+
+### `DELETE /api/actors/deleteconnection/{id}` — unlink specific movies
+
+**Body**
+- Required: `movieIds` (`[]int`) — only these links are removed; the actor and any other links stay intact
+
+```json
+{
+  "movieIds": [1, 5]
+}
+```
+
+## Genre endpoints
+
+Same shape as Actor, minus pagination and version checks.
 
 ## Movie — implemented functionality
 
@@ -52,45 +127,56 @@ Repo → service → handler wiring happens in `routes.go`, inside `RegisterRout
 
 ## Actor — implemented functionality
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/actors` | Create an actor. Body: `name`, `birthdate` (ISO 8601, `YYYY-MM-DD` or full RFC3339), optional `movieIds: []int` to link to existing movies right away |
-| `GET` | `/api/actors` | List all actors. Without `movies`, filmography is not fetched (avoids unnecessary JOINs on every request) |
-| `GET` | `/api/actors?movies=true` | List all actors, each including their filmography |
-| `GET` | `/api/actors?name={name}` | Search by name, partial case-insensitive match (`LIKE %name%`). Always includes filmography for each match |
-| `GET` | `/api/actors/{id}` | Actor by id, including filmography |
-| `PATCH` | `/api/actors/{id}` | Partial update: `name`, `birthdate`, `movieIds` — any field can be omitted and won't be changed |
-| `DELETE` | `/api/actors/{id}` | Delete an actor. If they have movies — 400 with a clear message. `?force=true` deletes the links in `movie_actors` first, then the actor |
-| `DELETE` | `/api/actors/deleteconnection/{id}` | Remove specific movie links from an actor. Body: `{"movieIds": [1, 2]}` — only the listed links are removed, the actor and any other links stay intact |
+**Body**
+- Required: `name` (string)
 
-### Implementation notes
+```json
+{
+  "name": "Neo-noir"
+}
+```
 
-- **Actor filmography** (`GetMovies`) uses `JOIN movies ON movies.id = movie_actors.movie_id WHERE movie_actors.actor_id = ?` — a single query instead of a loop of individual ones
-- **Dates** are stored in the DB as `TEXT` in `YYYY-MM-DD` format, converted both ways via `time.Parse("2006-01-02", ...)` / `.Format("2006-01-02")`
-- **PATCH** takes a separate `ActorPatchRequest` struct with pointer fields (`*string`, etc.) so "field not provided" can be distinguished from "field provided empty"
-- **Creating movie links** (`Create`/`Update` with `movieIds`) is wrapped in a transaction (`tx.Begin()` / `tx.Commit()` / `defer tx.Rollback()`) — if a link insert fails, everything rolls back, including the created/updated actor
-- Link insertion uses `INSERT OR IGNORE INTO movie_actors(movie_id, actor_id) VALUES (?, ?)`, protected against duplicates by the composite `PRIMARY KEY(movie_id, actor_id)`
-- **Force-delete**: first `DELETE FROM movie_actors WHERE actor_id = ?`, then `DELETE FROM actors WHERE id = ?` — order matters because foreign keys are enabled
-- **Removing specific links** (`DeleteConnection`) builds a single `DELETE ... WHERE actor_id = ? AND movie_id IN (?, ?, ...)` query with a dynamically sized placeholder list, instead of one query per movie id
+### `GET /api/genres` — list genres
 
-## Genre — implemented functionality
+**Query params** (optional)
+- `movies=true` — include each genre's associated movies
 
-Same CRUD set and same architecture as Actor:
+### `GET /api/genres/{id}` — get one genre
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/genres` | Create a genre |
-| `GET` | `/api/genres` | List all genres |
-| `GET` | `/api/genres/{id}` | Genre by id |
-| `PATCH` | `/api/genres/{id}` | Partial update of the name |
-| `DELETE` | `/api/genres/{id}` | Delete a genre. If it has linked movies — 400, `?force=true` to force delete |
-| `DELETE` | `/api/genres/deleteconnection/{id}` | Remove specific movie links from a genre. Body: `{"movieIds": [1, 2]}` — same pattern as the Actor equivalent |
+Always includes associated movies.
 
-## Input validation
+### `PATCH /api/genres/{id}` — update a genre
 
-Both `entity.Actor` and `entity.Genre` have a `Validate()` method (no external library — hand-written checks), called from the service layer before create/update. Errors from multiple fields are combined via `errors.Join`, so a single call can report several problems at once (e.g. empty name and a birth date in the future).
+**Body**
+- Optional: `name`
 
-## Known limitations / TODO
+```json
+{
+  "name": "Neo-noir Thriller"
+}
+```
 
-- The standard JSON decoder currently only accepts dates in RFC3339 format (`2000-09-08T00:00:00Z`) on `POST`; the simple `YYYY-MM-DD` format for incoming JSON isn't supported yet (needs a custom `UnmarshalJSON`/`MarshalJSON` for the date type)
-- Pagination (`page`/`size`) for list endpoints isn't implemented yet
+### `DELETE /api/genres/{id}` — delete a genre
+
+**Query params**
+- `force=true` (optional) — same behavior as Actor: without it, deleting a genre with movies fails with `400`
+
+### `DELETE /api/genres/deleteconnection/{id}` — unlink specific movies
+
+**Body**
+- Required: `movieIds` (`[]int`)
+
+```json
+{
+  "movieIds": [1, 5]
+}
+```
+
+## What to expect
+
+- `200 OK` — successful read
+- `201 Created` — successful create
+- `204 No Content` — successful update to nothing returned / successful delete
+- `400 Bad Request` — invalid input (missing required field, bad id, bad date, etc.) — the response body explains what's wrong
+- `404 Not Found` — the actor/genre id doesn't exist
+- `409 Conflict` — an actor was updated by someone else since you last fetched it (see `PATCH` above)

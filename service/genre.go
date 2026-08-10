@@ -37,6 +37,9 @@ func (s *GenreService) GetByID(id int) (entity.Genre, error) {
 	return genre, nil
 }
 func (s *GenreService) Update(id int, genre entity.GenrePatchRequest) (entity.Genre, error) {
+	if err := genre.Validate(); err != nil {
+		return entity.Genre{}, err
+	}
 	genreUpdated, err := s.repo.Update(id, genre)
 	if err != nil {
 		return entity.Genre{}, err
