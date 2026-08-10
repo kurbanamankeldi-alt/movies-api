@@ -27,9 +27,10 @@ type MovieRepository interface {
     FindByYear(year int) ([]*entity.Movie, error)
     FindByActor(actorId int) ([]*entity.Movie, error) 
     FindActors(id int) ([]entity.Actor, error)
+
     Create(movie *entity.Movie) (int64, error)
-    Update(id int, newData *entity.Movie) (int64, error)
-    Delete(id int) (int64, error)
+    Update(id int, patch *entity.MoviePatch) (int64, error)
+    Delete(id int, force bool) (int64, error)
     //extra
     FindByExactTitle(title string) (*entity.Movie, error) 
     FindByTitleContains(title string) ([]*entity.Movie, error)
@@ -321,143 +322,183 @@ func (r *SQLiteMovieRepository) Create(movie *entity.Movie) (int64, error) {
     return movieId, nil
 }
 
-func (r *SQLiteMovieRepository) Update(id int, newData *entity.Movie) (int64, error) {
-
+func (r *SQLiteMovieRepository) Update(id int, patch *entity.MoviePatch) (int64, error) {
     tx, err := r.db.Begin()
     if err != nil {
-        return 0, fmt.Errorf("%w: transaction movie start: %w", customerrors.ErrDB, err)
+        return 0, fmt.Errorf("%w: transaction movie update start: %w", customerrors.ErrDB, err)
     }
     defer tx.Rollback()
 
-    queryForMovies := `UPDATE movies 
-                       SET title = ?, release_year = ?, duration = ? 
-                       WHERE id = ?;`
+    //check if movie exists
+    var exists int
 
-    result, err := tx.Exec(queryForMovies, newData.Title, newData.ReleaseYear, newData.Duration, id)  
-    
-    if err != nil {
-        return 0, fmt.Errorf("%w: update movie (movie=%d): %w", customerrors.ErrDB, id, err)
-    }                    
+    err = tx.QueryRow(`SELECT 1 FROM movies WHERE id = ?`, id).Scan(&exists)
 
-    rows, err := result.RowsAffected()
     if err != nil {
-        return 0, fmt.Errorf("%w: iget affected rows for movie update: %w", customerrors.ErrDB, rows, err)
+        if errors.Is(err, sql.ErrNoRows) {
+            return 0, fmt.Errorf("%w: movie does not exist (movie=%d)", customerrors.ErrNotFound, id)
+        }
+
+        return 0, fmt.Errorf("%w: check movie existence (movie=%d): %w", customerrors.ErrDB, id, err)
     }
 
-    if rows == 0 {
-        return 0, fmt.Errorf("%w: movie does not exist (movie=%d) %w", customerrors.ErrNotFound, id, err)
-    }    
+    //update only provided fields 
 
-    _, err = tx.Exec(`DELETE FROM movie_actors WHERE movie_id = ?`, id)
-    if err != nil {
-        return 0, fmt.Errorf("%w: delete movie_actor failed (movie_id=%d) %w", customerrors.ErrDB, id, err)
-    }   
+    updates := []string{}
+    args := []any{}
 
-    _, err = tx.Exec(`DELETE FROM movie_genres WHERE movie_id = ?`, id)
-    if err != nil {
-        return 0, fmt.Errorf("%w: delete movie_genre failed (movie_id=%d) %w", customerrors.ErrDB, id, err)
-    }   
+    if patch.Title != nil {
+        updates = append(updates, "title = ?")
+        args = append(args, *patch.Title)
+    }
 
+    if patch.ReleaseYear != nil {
+        updates = append(updates, "release_year = ?")
+        args = append(args, *patch.ReleaseYear)
+    }
 
-    queryForMovieActors := `INSERT INTO movie_actors (movie_id, actor_id) VALUES (?, ?);`    
+    if patch.Duration != nil {
+        updates = append(updates, "duration = ?")
+        args = append(args, *patch.Duration)
+    }
 
-	for _, actor := range newData.Actors {
-		_, err := tx.Exec(queryForMovieActors, id, actor.Id)
-		if err != nil {
-			var sqliteErr sqlite3.Error
-			if errors.As(err, &sqliteErr) &&
-				sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
-				return 0, fmt.Errorf(
-					"%w: non existing (actorId=%d): %w",
-					customerrors.ErrInvalidReference,
-					actor.Id,
-					err,
-				)
-			}
+    if len(updates) > 0 {
+        args = append(args, id)
 
-			return 0, fmt.Errorf(
-				"%w: insert movie_actors (movie=%d, actor=%d): %w",
-				customerrors.ErrDB,
-				id,
-				actor.Id,
-				err,
-			)
-		}
-	}
-    
-    queryForMovieGenres := `INSERT INTO movie_genres (movie_id, genre_id) VALUES (?, ?);`     
-      
-	for _, genre := range newData.Genres {
-		_, err := tx.Exec(queryForMovieGenres, id, genre.Id)
-		if err != nil {
-			var sqliteErr sqlite3.Error
-			if errors.As(err, &sqliteErr) &&
-				sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
-				return 0, fmt.Errorf(
-					"%w: non existing (genreId=%d): %w",
-					customerrors.ErrInvalidReference,
-					genre.Id,
-					err,
-				)
-			}
+        query := fmt.Sprintf(`UPDATE movies SET %s WHERE id = ?`, strings.Join(updates, ", "))
 
-			return 0, fmt.Errorf(
-				"%w: insert movie_genres (movie=%d, genre=%d): %w",
-				customerrors.ErrDB,
-				id,
-				genre.Id,
-				err,
-			)
-		}
-	}
+        if _, err := tx.Exec(query, args...); err != nil {
+            return 0, fmt.Errorf("%w: update movie (movie=%d): %w", customerrors.ErrDB, id, err)
+        }
+    }
+
+    //if actor ids were supplied
+
+    if patch.Actors != nil {
+        if _, err := tx.Exec(`DELETE FROM movie_actors WHERE movie_id = ?`, id); err != nil {
+            return 0, fmt.Errorf("%w: delete movie actors (movie=%d): %w", customerrors.ErrDB, id, err)
+        }
+
+        query := `INSERT INTO movie_actors (movie_id, actor_id) VALUES (?, ?)`
+
+        for _, actor := range *patch.Actors {
+            if _, err := tx.Exec(query, id, actor.Id); err != nil {
+                var sqliteErr sqlite3.Error
+
+                if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
+                    return 0, fmt.Errorf("%w: non existing actor (actorId=%d)", customerrors.ErrInvalidReference, actor.Id)
+                }
+
+                return 0, fmt.Errorf("%w: insert movie actor (movie=%d, actor=%d): %w", customerrors.ErrDB, id, actor.Id, err)
+            }
+        }
+    }
+
+    //if genre ids were supplied
+
+    if patch.Genres != nil {
+        if _, err := tx.Exec(`DELETE FROM movie_genres WHERE movie_id = ?`, id); err != nil {
+            return 0, fmt.Errorf("%w: delete movie genres (movie=%d): %w", customerrors.ErrDB, id, err)
+        }
+
+        query := `INSERT INTO movie_genres (movie_id, genre_id) VALUES (?, ?)`
+
+        for _, genre := range *patch.Genres {
+            if _, err := tx.Exec(query, id, genre.Id); err != nil {
+                var sqliteErr sqlite3.Error
+
+                if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
+                    return 0, fmt.Errorf("%w: non existing genre (genreId=%d)", customerrors.ErrInvalidReference, genre.Id)
+                }
+
+                return 0, fmt.Errorf("%w: insert movie genre (movie=%d, genre=%d): %w", customerrors.ErrDB, id, genre.Id, err)
+            }
+        }
+    }
 
     if err := tx.Commit(); err != nil {
         return 0, fmt.Errorf("%w: transaction movie update commit: %w", customerrors.ErrDB, err)
     }
 
-    return rows, nil
+    return 1, nil
 }
 
-func (r *SQLiteMovieRepository) Delete(id int) (int64, error) {
+//adjust delete
+func (r *SQLiteMovieRepository) Delete(id int, force bool) (int64, error) {
     tx, err := r.db.Begin()
     if err != nil {
         return 0, fmt.Errorf("%w: transaction movie delete start: %w", customerrors.ErrDB, err)
     }
+
     defer tx.Rollback()
 
-    queryMovieActorsTable := `DELETE FROM movie_actors WHERE movie_id = ?`
-    queryMovieGenresTable := `DELETE FROM movie_genres WHERE movie_id = ?`
-    queryForMoviesTable := `DELETE FROM movies WHERE id = ?` 
+    ///exists
 
-    _, err = tx.Exec(queryMovieActorsTable, id)
+    var movieTitle string
+
+    err = tx.QueryRow(`SELECT title FROM movies WHERE id = ?`, id).Scan(&movieTitle)
+
     if err != nil {
-        return 0, fmt.Errorf("%w: delete movie_actors (movie=%d): %w", customerrors.ErrDB, id, err)
+        if errors.Is(err, sql.ErrNoRows) {
+            return 0, fmt.Errorf("%w: movie does not exist (movie=%d)", customerrors.ErrNotFound, id)
+        }
+
+        return 0, fmt.Errorf("%w: check movie before delete (movie=%d): %w", customerrors.ErrDB, id, err)
     }
 
-    _, err = tx.Exec(queryMovieGenresTable, id)
-    if err != nil {
-        return 0, fmt.Errorf("%w: delete movie_genres (movie=%d): %w", customerrors.ErrDB, id, err)
-    }   
+    //check conflict
 
-    result, err := tx.Exec(queryForMoviesTable, id)
+    var actorCount int
+    var genreCount int
+
+    err = tx.QueryRow(`SELECT COUNT(*) FROM movie_actors WHERE movie_id = ?`, id).Scan(&actorCount)
+
     if err != nil {
-        return 0, fmt.Errorf("%w: delete movies (movie=%d): %w", customerrors.ErrDB, id, err)
+        return 0, fmt.Errorf("%w: count movie actors (movie=%d): %w", customerrors.ErrDB, id, err)
     }
 
-    rows, err := result.RowsAffected()
+    err = tx.QueryRow(`SELECT COUNT(*) FROM movie_genres WHERE movie_id = ?`, id).Scan(&genreCount)
+
     if err != nil {
-        return 0, fmt.Errorf("%w: get affected rows after movie delete: %w", customerrors.ErrDB, err)
+        return 0, fmt.Errorf("%w: count movie genres (movie=%d): %w", customerrors.ErrDB, id, err)
     }
 
-    if rows == 0 {
-        return 0, fmt.Errorf("%w: movie does not exist (movie=%d)", customerrors.ErrNotFound, id)
+    //delete
+
+    if !force && (actorCount > 0 || genreCount > 0) {
+        return 0, fmt.Errorf("%w: cannot delete movie '%s' because it has %d actors and %d genres",
+            customerrors.ErrConflict,
+            movieTitle,
+            actorCount,
+            genreCount,
+        )
     }
+
+    //delete force
+
+    if force {
+        if _, err := tx.Exec(`DELETE FROM movie_actors WHERE movie_id = ?`, id); err != nil {
+            return 0, fmt.Errorf("%w: delete movie actors (movie=%d): %w", customerrors.ErrDB, id, err)
+        }
+
+        if _, err := tx.Exec(`DELETE FROM movie_genres WHERE movie_id = ?`, id); err != nil {
+            return 0, fmt.Errorf("%w: delete movie genres (movie=%d): %w", customerrors.ErrDB, id, err)
+        }
+    }
+
+    //delete movie
+
+    if _, err := tx.Exec(`DELETE FROM movies WHERE id = ?`, id); err != nil {
+        return 0, fmt.Errorf("%w: delete movie (movie=%d): %w", customerrors.ErrDB, id, err)
+    }
+
+    //commit
 
     if err := tx.Commit(); err != nil {
-        return 0, fmt.Errorf("%w: transaction movie delete commit:  %w", customerrors.ErrDB, err)
+        return 0, fmt.Errorf("%w: transaction movie delete commit: %w", customerrors.ErrDB, err)
     }
 
-    return rows, nil
+    return 1, nil
 }
 
 //extra

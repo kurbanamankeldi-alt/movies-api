@@ -8,6 +8,7 @@ import (
 	"strings"
 	"errors"
 	"log"
+	"time"
 	"github.com/kurbanamankeldi-alt/movies-api/customerrors"
 	"github.com/kurbanamankeldi-alt/movies-api/entity"
 	"github.com/kurbanamankeldi-alt/movies-api/service"
@@ -233,6 +234,7 @@ func (h *MovieHandler) Create(w http.ResponseWriter, r *http.Request) *customerr
 	return nil
 }
 
+
 func (h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
 	if r.Method != http.MethodPatch {
 		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
@@ -243,36 +245,63 @@ func (h *MovieHandler) Update(w http.ResponseWriter, r *http.Request) *customerr
 		return errorResponse(err)
 	}
 	
-	var newData *entity.Movie
+	var patch entity.MoviePatch
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&newData)
+	err = decoder.Decode(&patch)
 
 	if err != nil {
 		return &customerrors.HttpError{Message: "invalid request body", Code: http.StatusBadRequest}
 	}
 
-	if err := newData.ValidateMovie(); err != nil {
-		return &customerrors.HttpError{Message: err.Error(), Code: http.StatusBadRequest}
-	}	
+   // Validate only supplied scalar fields.
 
-	_, updateErr := h.service.UpdateMovie(movieId, newData)
+    if patch.Title != nil {
+        if strings.TrimSpace(*patch.Title) == "" {
+            return &customerrors.HttpError{Message: "movie title cannot be empty", Code: http.StatusBadRequest}
+        }
+    }
 
-	if updateErr != nil {
-		return errorResponse(updateErr)
-	}
+    currentYear := time.Now().Year()
 
-	movie, err := h.service.GetMovieById(movieId)
+    if patch.ReleaseYear != nil {
+        if *patch.ReleaseYear < 1888 {
+            return &customerrors.HttpError{Message: "movie release year cannot be before 1888", Code: http.StatusBadRequest}
+        }
 
-	if err != nil {
-		return errorResponse(err)
-	}
+        if *patch.ReleaseYear > currentYear {
+            return &customerrors.HttpError{
+                Message: fmt.Sprintf("movie has not been released yet: %d", *patch.ReleaseYear),
+                Code: http.StatusBadRequest,
+            }
+        }
+    }
 
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(movie)
+    if patch.Duration != nil && *patch.Duration <= 0 {
+        return &customerrors.HttpError{Message: "movie duration must be greater than zero", Code: http.StatusBadRequest}
+    }
 
-	return nil
+    _, err = h.service.UpdateMovie(movieId, &patch)
+
+    if err != nil {
+        return errorResponse(err)
+    }
+
+    movie, err := h.service.GetMovieById(movieId)
+
+    if err != nil {
+        return errorResponse(err)
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+
+    if err := json.NewEncoder(w).Encode(movie); err != nil {
+        return &customerrors.HttpError{Message: "failed to encode JSON", Code: http.StatusInternalServerError}
+    }
+
+    return nil
 }
 
 func (h *MovieHandler) Delete(w http.ResponseWriter, r *http.Request) *customerrors.HttpError {
@@ -280,22 +309,41 @@ func (h *MovieHandler) Delete(w http.ResponseWriter, r *http.Request) *customerr
 		return &customerrors.HttpError{Message: "method not allowed", Code: http.StatusMethodNotAllowed}
 	}
 
-	movieIdStr := r.PathValue("id")
-	movieIdInt, err := strconv.Atoi(movieIdStr)
+    movieId, err := parseIdFromParam(
+        r.PathValue("id"),
+        "movie id",
+    )
 
-	if err != nil || movieIdInt <= 0 {
-		return &customerrors.HttpError{Message: "invalid movie id", Code: http.StatusBadRequest}
-	}
+    if err != nil {
+        return errorResponse(err)
+    }
 
-	_, deleteErr := h.service.DeleteMovie(movieIdInt)
+    force := false
 
-	if deleteErr != nil {
-		return errorResponse(deleteErr)
-	}
+    forceParam := r.URL.Query().Get("force")
 
-	w.WriteHeader(http.StatusNoContent)
+    if forceParam != "" {
+        parsedForce, err := strconv.ParseBool(forceParam)
 
-	return nil
+        if err != nil {
+            return &customerrors.HttpError{
+                Message: "force must be true or false",
+                Code:    http.StatusBadRequest,
+            }
+        }
+
+        force = parsedForce
+    }
+
+    _, err = h.service.DeleteMovie(movieId, force)
+
+    if err != nil {
+        return errorResponse(err)
+    }
+
+    w.WriteHeader(http.StatusNoContent)
+
+    return nil
 }
 
 // extra
@@ -407,7 +455,7 @@ func errorResponse(err error) *customerrors.HttpError {
 		}	
 	case errors.Is(err, customerrors.ErrConflict):
 		return &customerrors.HttpError{
-			Message: "conflict",
+			Message: err.Error(),
 			Code:    http.StatusConflict,
 		}
 	case errors.Is(err, customerrors.ErrInvalidReference):

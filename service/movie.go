@@ -100,24 +100,12 @@ func (s *MovieService) CreateMovie(movie *entity.Movie) (int64, error) {
 	return createdId, nil
 }
 
-func (s *MovieService) UpdateMovie(id int, newData *entity.Movie) (int64, error) {
-	updatedRow, err := s.repo.Update(id, newData)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return updatedRow, nil
+func (s *MovieService) UpdateMovie(id int, patch *entity.MoviePatch) (int64, error) {
+    return s.repo.Update(id, patch)
 }
 
-func (s *MovieService) DeleteMovie(id int) (int64, error) {
-	updatedRow, err := s.repo.Delete(id)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return updatedRow, nil
+func (s *MovieService) DeleteMovie(id int, force bool) (int64, error) {
+    return s.repo.Delete(id, force)
 }
 
 //extra
